@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-cyber-950 text-slate-100 font-sans min-h-screen;
+    background-image:
+      radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.06) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(99, 102, 241, 0.06) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(6, 182, 212, 0.02) 0px, transparent 60%);
+    background-attachment: fixed;
+  }
+
+  /* Faint grid backdrop for the security-console aesthetic */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(51, 65, 85, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(51, 65, 85, 0.05) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* Consistent, accessible focus ring across interactive elements */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid rgba(6, 182, 212, 0.7);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+
+  /* Custom subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b1120;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 4px;
+    border: 2px solid #0b1120;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #06b6d4;
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 #0b1120;
+  }
+}
+
+@layer utilities {
+  .glow-cyan {
+    box-shadow: 0 0 20px -5px rgba(6, 182, 212, 0.3);
+  }
+  .glow-cyan-sm {
+    box-shadow: 0 0 10px -2px rgba(6, 182, 212, 0.25);
+  }
+  .glow-cyan-lg {
+    box-shadow: 0 0 40px -8px rgba(6, 182, 212, 0.4);
+  }
+  .glass-panel {
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+  }
+
+  /* Cyan gradient text used for headings/branding */
+  .text-gradient-cyan {
+    background-image: linear-gradient(90deg, #f8fafc, #e2e8f0, #22d3ee);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Animated sheen for primary call-to-action surfaces */
+  .cta-sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-sheen::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      rgba(255, 255, 255, 0.18),
+      transparent
+    );
+    transform: skewX(-18deg);
+    transition: left 0.6s ease;
+  }
+  .cta-sheen:hover::after {
+    left: 150%;
+  }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Lightweight enter-animation utilities.
+ *
+ * The component markup throughout the app already uses the class contract
+ * `animate-in fade-in zoom-in-95 slide-in-from-* duration-*` (the
+ * tailwindcss-animate convention). Those classes are implemented here so the
+ * transitions actually play, without adding a build-time plugin dependency.
+ * A prefers-reduced-motion guard disables them for users who opt out.
+ * ---------------------------------------------------------------------------
+ */
+@keyframes ctf-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform:
+      translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale(var(--tw-enter-scale, 1));
+  }
+}
+
+.animate-in {
+  animation-name: ctf-enter;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  --tw-enter-opacity: 0;
+}
+.zoom-in-95 {
+  --tw-enter-scale: 0.95;
+}
+.zoom-in-90 {
+  --tw-enter-scale: 0.9;
+}
+.slide-in-from-top-2 {
+  --tw-enter-translate-y: -0.5rem;
+}
+.slide-in-from-top-4 {
+  --tw-enter-translate-y: -1rem;
+}
+.slide-in-from-bottom-2 {
+  --tw-enter-translate-y: 0.5rem;
+}
+.slide-in-from-bottom-4 {
+  --tw-enter-translate-y: 1rem;
+}
+.slide-in-from-left-4 {
+  --tw-enter-translate-x: -1rem;
+}
+.slide-in-from-right-4 {
+  --tw-enter-translate-x: 1rem;
+}
+
+.duration-150 {
+  animation-duration: 150ms;
+}
+.duration-200 {
+  animation-duration: 200ms;
+}
+.duration-300 {
+  animation-duration: 300ms;
+}
+.duration-500 {
+  animation-duration: 500ms;
+}
+
+/* Gentle continuous float for hero/celebration glyphs */
+@keyframes ctf-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.animate-float {
+  animation: ctf-float 4s ease-in-out infinite;
+}
+
+/* Slow spin for decorative rings */
+@keyframes ctf-spin-slow {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: ctf-spin-slow 8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .animate-float,
+  .animate-spin-slow {
+    animation: none !important;
+  }
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Toast progress bar countdown */
+@keyframes toast-shrink {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+/* Subtle pulsing glow for decorative accents */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.8; }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+

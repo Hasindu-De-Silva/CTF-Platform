@@ -1,0 +1,40 @@
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment and secrets
+.env
+.env*.local
+*.pem
+cookies*.txt
+admin_cookies*.txt
+
+# IDE and Editor configs
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Java / Spring Boot Backend
+ctf-platform-backend/target/
+ctf-platform-backend/*.jar
+ctf-platform-backend/*.war
+ctf-platform-backend/.mvn/wrapper/maven-wrapper.jar
+
+# Frontend / Vite / Node.js
+ctf-platform-frontend/node_modules/
+ctf-platform-frontend/dist/
+ctf-platform-frontend/dist-ssr/
+ctf-platform-frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# General logs
+logs/
+*.log

@@ -1,0 +1,12 @@
+{
+  "name": "ctf-stage6-capstone",
+  "version": "1.0.0",
+  "description": "Stage 6 Capstone - Linux Privilege Escalation Web Terminal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

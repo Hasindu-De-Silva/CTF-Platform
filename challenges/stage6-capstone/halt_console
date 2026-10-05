@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+import sys
+import os
+import time
+
+FLAG = "CTF{r00t_pr1v_3sc4l4t10n_d0n3}"
+EXPECTED_PHRASE = "AEGIS-HALT-2026-OMEGA"
+
+def main():
+    print("============================================================")
+    print("HEXATECH CORE MAINFRAME // EMERGENCY DISARM PROTOCOL")
+    print("Console: /opt/halt_console [EUID 0 RESTRICTED]")
+    print("============================================================\n")
+
+    # Check effective root privilege
+    if os.geteuid() != 0:
+        print("[FATAL ERROR] Permission Denied: This emergency halt console requires ROOT privileges.")
+        print("[!] Audit your user permissions using 'sudo -l' to locate escalation vectors.\n")
+        sys.exit(1)
+
+    phrase = ""
+    if len(sys.argv) > 1:
+        phrase = sys.argv[1].strip()
+    else:
+        try:
+            phrase = input("Enter Stage 7 Authorization Override Phrase: ").strip()
+        except EOFError:
+            sys.exit(1)
+
+    if phrase == EXPECTED_PHRASE:
+        print("\n[+] VERIFYING AUTHORIZATION TOKEN: " + phrase)
+        print("[+] Root authority confirmed (UID 0).")
+        print("[+] Reversing power grid sabotage sequence...")
+        time.sleep(0.5)
+        print("[+] Core grid capacitors neutralized!")
+        print("\n" + "="*60)
+        print(">>> OPERATION AEGIS BREACH COMPLETE! <<<")
+        print(">>> Final Capstone Flag: " + FLAG + " <<<")
+        print("="*60 + "\n")
+    else:
+        print("\n[-] REJECTED: Invalid authorization phrase '" + phrase + "'!")
+        print("[-] Reverse engineer Marcus's 'countdown.elf' binary to recover the valid phrase.")
+        sys.exit(2)
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,12 @@
+{
+  "name": "ctf-target-stage4",
+  "version": "1.0.0",
+  "description": "Stage 4 Target: Vulnerable Perimeter Authentication Gateway",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

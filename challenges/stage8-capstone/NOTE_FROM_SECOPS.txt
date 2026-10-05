@@ -1,0 +1,7 @@
+[URGENT SECURITY ADVISORY // TASK FORCE 4]
+Marcus Vance initiated the Core Grid Sabotage sequence!
+The emergency halt console is locked at /opt/halt_console and requires ROOT privilege.
+
+Check allowed administrative privileges using 'sudo -l' to discover misconfigured execution rights!
+Once root is achieved, execute:
+    /opt/halt_console <Stage 7 Authorization Phrase>

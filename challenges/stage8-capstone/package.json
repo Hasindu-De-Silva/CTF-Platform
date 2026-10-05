@@ -1,0 +1,9 @@
+{
+  "name": "ctf-target-stage8",
+  "version": "1.0.0",
+  "description": "Stage 8 Target: Core Mainframe Linux Takeover",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

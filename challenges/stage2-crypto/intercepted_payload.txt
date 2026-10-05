@@ -1,0 +1,26 @@
+========================================================================
+HEXATECH SIGINT DIVISION - INTERCEPT RECORD #9021-CRYPTO
+Classification: CONFIDENTIAL // INCIDENT RESPONSE TEAM ONLY
+Source: Hostile Egress Transmission (Relay Port 8443)
+Timestamp: 2026-08-14 03:14:22 UTC
+========================================================================
+
+ANALYST LOG:
+Signals intelligence intercepted an anomalous egress burst originating from 
+Substation Alpha-9 moments after the perimeter breach alarm.
+
+Telemetry indicates the adversary processed the dispatch through a multi-stage 
+transformation pipeline before transmission to their hidden C2 channel.
+Preliminary analysis suggests an outer transport encoding masking an inner 
+keyed polyalphabetic stream. The decryption key is suspected to be held 
+within the operational badge artifact recovered at the facility.
+
+INTERCEPTED TRANSMISSION:
+------------------------------------------------------------------------
+W0hJRElMT0dGIEMyIEZLSVVZUiBSUkVUQUVTV1FJU1QgLy8gV01ERk1VUkogSk1CV1JdClNzYXp1bzogUVQtNDA5MiAtPiBIbWpsd3ggVmNsZWUgVmduaSBZbHRuaS05Clh2ZWU6IENYTHtrMWhyM3ZfYWg0MXJfajNrMHYzbn0KWHlya2tiIFlreGN3ZWUgWGdieHlsOiBsemJoOi8vdnNhYXBud2tkOjgwODEgKFRjcm1zbWxvdiBRdWZ5YnNkbW1uIEVyeHprLTkpCkhncmlpYmFmaTogR25ua2tsIGxzbWxpZ3YgS0FQIHp5dGdhayB5ciBjbXRyd3FvaSBqb2tvdiBseSBtbGZtcmJqa3hjIGFoc3FmIG5lcWhmdWlqbi4K
+------------------------------------------------------------------------
+
+TASK:
+1. Reconstruct the plaintext message.
+2. Recover the security verification flag.
+3. Extract the target gateway portal coordinates for the next investigation stage.

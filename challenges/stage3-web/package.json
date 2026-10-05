@@ -1,0 +1,13 @@
+{
+  "name": "ctf-stage3-vulnerable-web",
+  "version": "1.0.0",
+  "description": "IE3132 Stage 3: Intentionally Vulnerable Authentication Gateway",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  }
+}

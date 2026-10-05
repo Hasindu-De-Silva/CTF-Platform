@@ -1,0 +1,45 @@
+=====================================================
+CYBERVAULT: OPERATION AEGIS BREACH - ARTIFACT MANIFEST
+Group ID: 46 (IE3132 Penetration Testing)
+=====================================================
+
+Artifact: osint_index.html
+  Size: 5330 bytes
+  SHA-256: 10c49e0ea15029580f27092aff92ac4aca3dc3c738c2a8ba15495665f65170f9
+
+Artifact: osint_profile.html
+  Size: 2270 bytes
+  SHA-256: 6a4f55710f959c15d4d181a65835f2b130b8f5671d7f6eac238103ad6a3adc21
+
+Artifact: osint_forum.html
+  Size: 1979 bytes
+  SHA-256: 154e318a20139ae55627afdd29044f1f63416a8402e7824d5ae8ee088a9f6abc
+
+Artifact: evidence_badge.png
+  Size: 1584 bytes
+  SHA-256: 72a3e42eca82dddefdca46ff9af71ed69f7b3dce76c3c0601ea46897bce180ef
+
+Artifact: intercepted_payload.txt
+  Size: 1604 bytes
+  SHA-256: 7891fb0864b686fe02cb42668feb6f586f29465c3eedddedf680bfc809214c02
+
+Artifact: incident_traffic.pcap
+  Size: 994 bytes
+  SHA-256: be21641ee59aefdc9a874c8d0b9cb73e4a52996cbb62821b1aa0472009faf40b
+
+Artifact: disk_evidence.raw
+  Size: 524288 bytes
+  SHA-256: d510f397886088b333b7d25e64d266a291333482641541f63d256f625c4d2ea4
+
+Artifact: countdown.c
+  Size: 2110 bytes
+  SHA-256: 33e8e360c991d43ec91bba1e87b3ab5d53f4e1e61c379512f383bcc76f55b260
+
+Artifact: countdown.elf
+  Size: 4474 bytes
+  SHA-256: 4bac417dba8f1f6f8788380fd9ce82b9b54c7cd1a4d37d6c5de1bedb3af82eb1
+
+Artifact: halt_console
+  Size: 1668 bytes
+  SHA-256: 7df21326aba9ce849b215541b5102fb54dc582b504a1ac12c2d5df5f16dfc96a
+

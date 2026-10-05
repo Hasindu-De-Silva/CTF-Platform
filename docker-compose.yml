@@ -1,0 +1,146 @@
+version: '3.8'
+
+networks:
+  # 1. Internal management network for CTF platform and database
+  ctf-management-net:
+    driver: bridge
+    internal: false
+
+  # 2. Isolated sandbox network for Stage 4 Web Gateway
+  # internal: true guarantees NO outbound route to host or external network
+  ctf-net-web:
+    driver: bridge
+    internal: true
+
+  # 3. Isolated sandbox network for Stage 8 Core Mainframe
+  # internal: true guarantees total network isolation from host and from Stage 4
+  ctf-net-linux:
+    driver: bridge
+    internal: true
+
+services:
+  # -------------------------------------------------------------
+  # 1. CTF Database Service (MySQL 8.0 / 8.4 LTS)
+  # -------------------------------------------------------------
+  mysql-db:
+    image: mysql:8.0
+    container_name: ctf-mysql-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ctf_playbox
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - ctf-management-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # -------------------------------------------------------------
+  # 2. CTF Platform Core Backend (Spring Boot 3 REST API)
+  # -------------------------------------------------------------
+  ctf-backend:
+    build:
+      context: ./ctf-platform-backend
+      dockerfile: Dockerfile
+    container_name: ctf-backend-api
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/ctf_playbox?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - ctf-management-net
+
+  # -------------------------------------------------------------
+  # 3. CTF Platform Frontend (React + Vite + Nginx Reverse Proxy)
+  # -------------------------------------------------------------
+  ctf-frontend:
+    build:
+      context: ./ctf-platform-frontend
+      dockerfile: Dockerfile
+    container_name: ctf-frontend-ui
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - ctf-backend
+    networks:
+      - ctf-management-net
+
+  # -------------------------------------------------------------
+  # 4. Gateway Reverse Proxy (Dual-homed isolation bridge)
+  # Mediates participant traffic to isolated sandbox targets
+  # -------------------------------------------------------------
+  ctf-gateway:
+    build:
+      context: ./ctf-gateway
+      dockerfile: Dockerfile
+    container_name: ctf-gateway-proxy
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+      - "8086:8086"
+      - "2222:2222"
+    depends_on:
+      - ctf-stage4-web
+      - ctf-stage8-capstone
+    networks:
+      - ctf-management-net
+      - ctf-net-web
+      - ctf-net-linux
+
+  # -------------------------------------------------------------
+  # 5. Stage 4 Challenge Target: Vulnerable Perimeter Web Gateway
+  # Domain: Web Technologies / Web Security (SQL Injection)
+  # -------------------------------------------------------------
+  ctf-stage4-web:
+    build:
+      context: ./challenges/stage4-web
+      dockerfile: Dockerfile
+    container_name: ctf-target-stage4
+    restart: on-failure
+    expose:
+      - "8081"
+    networks:
+      - ctf-net-web
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  # -------------------------------------------------------------
+  # 6. Stage 8 Challenge Target: Linux Privilege Escalation Capstone
+  # Domain: Linux / System Security (GTFOBins sudo find & halt console)
+  # -------------------------------------------------------------
+  ctf-stage8-capstone:
+    build:
+      context: ./challenges/stage8-capstone
+      dockerfile: Dockerfile
+    container_name: ctf-target-stage8
+    restart: on-failure
+    expose:
+      - "22"
+      - "8086"
+    networks:
+      - ctf-net-linux
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+volumes:
+  mysql_data:
+    driver: local
