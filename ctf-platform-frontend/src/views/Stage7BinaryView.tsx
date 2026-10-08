@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { Terminal, Code, Cpu, Download, ArrowLeft, Check, Copy, AlertCircle, Sparkles, Shield } from 'lucide-react';
+import { Terminal, Code, Cpu, Download, ArrowLeft, Check, Copy, AlertCircle, Sparkles, Shield, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const VERIFICATION_TABLE = [
-  0x3F, 0x3E, 0x39, 0x30, 0x48, 0x35, 0x50, 0x54, 0x5E, 0x67, 
-  0x3B, 0x41, 0x41, 0x4A, 0x34, 0x60, 0x5F, 0x58, 0x59, 0x76, 
-  0x78
+  0x1B, 0x22, 0x23, 0x1C, 0x15, 0x86, 0x24, 0x30, 0x2E, 0x29,
+  0x95, 0x89, 0x8E, 0x8F, 0x96, 0xA4, 0x45, 0x4A, 0x55, 0x56,
+  0x57
 ];
 
 export const Stage7BinaryView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'tester' | 'decompile' | 'strings'>('tester');
-  const [testPhrase, setTestPhrase] = useState('AEGIS-HALT-2026-OMEGA');
+  const [testPhrase, setTestPhrase] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedPhrase, setCopiedPhrase] = useState(false);
 
   const flag = "CTF{r3v3rs3_3ng1n33r_m4st3r}";
   const authPhrase = "AEGIS-HALT-2026-OMEGA";
 
-  // Compute live transform
+  // Compute live byte transform
   const charResults = testPhrase.split('').map((char, i) => {
     const origCode = char.charCodeAt(0);
-    const transformed = ((origCode ^ 0x5a) + (i * 3)) & 0xff;
+    const transformed = ((origCode ^ 0x5A) + (i * 3)) & 0xFF;
     const target = i < VERIFICATION_TABLE.length ? VERIFICATION_TABLE[i] : null;
     const isMatch = target !== null && transformed === target;
     return {
@@ -145,15 +145,18 @@ export const Stage7BinaryView: React.FC = () => {
                     type="text"
                     value={testPhrase}
                     onChange={(e) => setTestPhrase(e.target.value)}
-                    placeholder="Enter candidate phrase..."
+                    placeholder="Enter candidate phrase (e.g. from your reverse-engineering script)..."
                     className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 font-mono text-sm tracking-wider focus:outline-none focus:border-cyan-500"
                   />
-                  <button
-                    onClick={() => setTestPhrase('AEGIS-HALT-2026-OMEGA')}
-                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-colors"
-                  >
-                    Solve Phrase
-                  </button>
+                  {testPhrase && (
+                    <button
+                      onClick={() => setTestPhrase('')}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-colors flex items-center gap-1"
+                      title="Clear Input"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Clear
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -178,25 +181,33 @@ export const Stage7BinaryView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-900">
-                      {charResults.map((r) => (
-                        <tr key={r.index} className={r.isMatch ? 'bg-emerald-950/20' : 'bg-rose-950/20'}>
-                          <td className="py-1.5 px-2 text-slate-400">[{r.index}]</td>
-                          <td className="py-1.5 px-2 font-bold text-white">'{r.char}'</td>
-                          <td className="py-1.5 px-2 text-slate-400">0x{r.origCode.toString(16).toUpperCase()}</td>
-                          <td className="py-1.5 px-2 text-slate-400">0x{(r.origCode ^ 0x5a).toString(16).toUpperCase()}</td>
-                          <td className="py-1.5 px-2 font-semibold text-cyan-300">0x{r.transformed.toString(16).toUpperCase()}</td>
-                          <td className="py-1.5 px-2 text-amber-300">
-                            {r.target !== null ? `0x${r.target.toString(16).toUpperCase()}` : 'OVERFLOW'}
-                          </td>
-                          <td className="py-1.5 px-2">
-                            {r.isMatch ? (
-                              <span className="text-emerald-400 font-bold">MATCH</span>
-                            ) : (
-                              <span className="text-rose-400 font-bold">FAIL</span>
-                            )}
+                      {charResults.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-500 italic">
+                            No input provided yet. Type candidate characters above or run your reverse-engineering script.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        charResults.map((r) => (
+                          <tr key={r.index} className={r.isMatch ? 'bg-emerald-950/20' : 'bg-rose-950/20'}>
+                            <td className="py-1.5 px-2 text-slate-400">[{r.index}]</td>
+                            <td className="py-1.5 px-2 font-bold text-white">'{r.char}'</td>
+                            <td className="py-1.5 px-2 text-slate-400">0x{r.origCode.toString(16).toUpperCase()}</td>
+                            <td className="py-1.5 px-2 text-slate-400">0x{(r.origCode ^ 0x5A).toString(16).toUpperCase()}</td>
+                            <td className="py-1.5 px-2 font-semibold text-cyan-300">0x{r.transformed.toString(16).toUpperCase()}</td>
+                            <td className="py-1.5 px-2 text-amber-300">
+                              {r.target !== null ? `0x${r.target.toString(16).toUpperCase()}` : 'OVERFLOW'}
+                            </td>
+                            <td className="py-1.5 px-2">
+                              {r.isMatch ? (
+                                <span className="text-emerald-400 font-bold">MATCH</span>
+                              ) : (
+                                <span className="text-rose-400 font-bold">FAIL</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -218,6 +229,7 @@ export const Stage7BinaryView: React.FC = () => {
                     <button
                       onClick={handleCopyFlag}
                       className="p-2 rounded bg-slate-800 text-slate-300 hover:text-white"
+                      title="Copy Flag"
                     >
                       {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
@@ -231,6 +243,7 @@ export const Stage7BinaryView: React.FC = () => {
                     <button
                       onClick={handleCopyPhrase}
                       className="p-2 rounded bg-slate-800 text-slate-300 hover:text-white"
+                      title="Copy Authorization Phrase"
                     >
                       {copiedPhrase ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
@@ -240,7 +253,7 @@ export const Stage7BinaryView: React.FC = () => {
                 <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>
-                    Phrase must be exactly 21 characters and satisfy all table transformations. Type or click 'Solve Phrase' to test.
+                    The phrase must be exactly 21 characters and satisfy all table transformations. Analyze the decompiled logic or write an inverse solver in Python.
                   </span>
                 </div>
               )}
@@ -271,7 +284,7 @@ export const Stage7BinaryView: React.FC = () => {
                   Next Step: Stage 8 Capstone
                 </span>
                 <p className="text-slate-400 leading-relaxed">
-                  Preserve the recovered authorization phrase <code>AEGIS-HALT-2026-OMEGA</code>. In Stage 8, you will escalate to root on the core mainframe and invoke <code>/opt/halt_console</code> with this phrase to neutralize the sabotage protocol!
+                  Preserve the recovered authorization phrase. In Stage 8, you will escalate to root on the core mainframe and invoke <code>/opt/halt_console</code> with this phrase to neutralize the sabotage protocol!
                 </p>
               </div>
             </div>
@@ -287,7 +300,7 @@ export const Stage7BinaryView: React.FC = () => {
                   Ghidra / IDA Pro C Pseudocode: verify_phrase()
                 </h2>
               </div>
-              <span className="text-xs font-mono text-slate-500">countdown.c (Extracted Logic)</span>
+              <span className="text-xs font-mono text-slate-500">countdown.elf (Decompiled Routine)</span>
             </div>
 
             <pre className="p-5 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono text-cyan-300 leading-relaxed overflow-x-auto">
@@ -297,19 +310,19 @@ export const Stage7BinaryView: React.FC = () => {
 // =========================================================================
 
 static const unsigned char VERIFICATION_TABLE[21] = {
-    0x3F, 0x3E, 0x39, 0x30, 0x48, 0x35, 0x50, 0x54, 0x5E, 0x67,
-    0x3B, 0x41, 0x41, 0x4A, 0x34, 0x60, 0x5F, 0x58, 0x59, 0x76,
-    0x78
+    0x1B, 0x22, 0x23, 0x1C, 0x15, 0x86, 0x24, 0x30, 0x2E, 0x29,
+    0x95, 0x89, 0x8E, 0x8F, 0x96, 0xA4, 0x45, 0x4A, 0x55, 0x56,
+    0x57
 };
 
 int verify_phrase(const char *input) {
     size_t len = strlen(input);
     if (len != 21) {
-        return 0; // Length check failed
+        return 0; // Length check failed: must be exactly 21 bytes
     }
 
     for (size_t i = 0; i < len; i++) {
-        // Byte-wise XOR 0x5A followed by index multiplication
+        // Byte-wise XOR with 0x5A followed by index multiplication offset
         unsigned char transformed = (unsigned char)(((unsigned char)input[i] ^ 0x5A) + (i * 3));
         if (transformed != VERIFICATION_TABLE[i]) {
             return 0; // Mismatch on byte index
@@ -321,9 +334,11 @@ int verify_phrase(const char *input) {
 }
 
 int main(int argc, char *argv[]) {
-    // Reads phrase, validates with verify_phrase()
-    // If valid: prints CTF{r3v3rs3_3ng1n33r_m4st3r}
-    // And provides authorization phrase: AEGIS-HALT-2026-OMEGA
+    // Reads candidate phrase from argv[1] or stdin
+    // If verify_phrase(buffer) returns 1:
+    //   Decodes obfuscated flag and outputs authorized halt phrase
+    // Else:
+    //   Outputs access denied warning
 }`}
             </pre>
           </div>
@@ -332,24 +347,34 @@ int main(int argc, char *argv[]) {
         {activeTab === 'strings' && (
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 font-mono text-xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <span className="text-slate-400">strings -a countdown.elf | grep -E "(HEXATECH|Flag|Authorization)"</span>
+              <span className="text-slate-400">strings -a countdown.elf</span>
               <span className="text-cyan-400">ELF Header: x86-64 LSB</span>
             </div>
+            <p className="text-slate-400 text-[11px] mb-2">
+              Note: Running <code>strings</code> reveals prompt banners and error messages, but neither the authorization phrase nor the flag is stored in plaintext. Static disassembly or runtime analysis is required.
+            </p>
             <pre className="text-slate-300 leading-relaxed overflow-x-auto">
 {`/lib64/ld-linux-x86-64.so.2
-libc.so.6
-printf
 fgets
+stdin
+puts
+strncpy
 strlen
+strcspn
 __libc_start_main
+libc.so.6
+=====================================================
 HEXATECH SABOTAGE PROTOCOL // EMERGENCY HALT CONSOLE
 Binary: countdown.elf (v4.09-stripped)
-Enter Sabotage Authorization Override Phrase:
+=====================================================
+Enter Sabotage Authorization Override Phrase: 
 [+] VERIFICATION SUCCESSFUL!
 [+] Sabotage countdown halted successfully!
-[+] Stage 7 Flag: CTF{r3v3rs3_3ng1n33r_m4st3r}
-[+] Authorized Mainframe Halt Phrase: AEGIS-HALT-2026-OMEGA
-[-] ACCESS DENIED! Invalid authorization phrase.`}
+[+] Stage 7 Flag: %s
+[+] Authorized Mainframe Halt Phrase: %s
+[!] Use this authorization phrase in Stage 8 (/opt/halt_console) to disarm aegis-core.
+[-] ACCESS DENIED! Invalid authorization phrase.
+[-] The core grid sabotage protocol continues counting down.`}
             </pre>
           </div>
         )}

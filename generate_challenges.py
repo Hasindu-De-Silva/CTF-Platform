@@ -3,6 +3,10 @@ import struct
 import zlib
 import base64
 import hashlib
+import random
+import io
+import tarfile
+import gzip
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHALLENGES_DIR = os.path.join(BASE_DIR, "challenges")
@@ -297,8 +301,13 @@ TASK:
 
 # -------------------------------------------------------------
 # Stage 5: Networking - incident_traffic.pcap
+# -------------------------------------------------------------
+# Stage 5: Networking - incident_traffic.pcap
 # Flag: CTF{un3ncrypt3d_tr4ff1c_l34k}
-# Contains unencrypted HTTP POST + JSON Response + Workstation wipe stream
+# Table 10 Specification:
+# - ~3,000 packets: DNS, HTTP, ARP, TLS decoys
+# - One unencrypted HTTP upload split across TCP segments (flag)
+# - Second stream confirming the workstation wipe (bridge to Stage 6)
 # -------------------------------------------------------------
 def make_pcap():
     magic = 0xa1b2c3d4
@@ -321,60 +330,316 @@ def make_pcap():
         s = s + (s >> 16)
         return (~s) & 0xffff
 
-    def build_eth_ip_tcp(src_ip, dst_ip, src_port, dst_port, seq, ack, flags, payload):
-        eth_hdr = struct.pack("!6s6sH", b"\x00\x0c\x29\x1a\x2b\x3c", b"\x00\x50\x56\xe1\x82\x93", 0x0800)
-        ip_total_len = 20 + 20 + len(payload)
-        ip_hdr_no_chk = struct.pack("!BBHHHBBH4s4s", 0x45, 0, ip_total_len, 54321, 0x4000, 64, 6, 0, src_ip, dst_ip)
+    def build_eth(src_mac, dst_mac, eth_type):
+        return struct.pack("!6s6sH", src_mac, dst_mac, eth_type)
+
+    def build_arp(sender_mac, sender_ip, target_mac, target_ip, op=1):
+        eth = build_eth(sender_mac, b"\xff\xff\xff\xff\xff\xff" if op == 1 else target_mac, 0x0806)
+        arp = struct.pack("!HHBBH6s4s6s4s", 1, 0x0800, 6, 4, op, sender_mac, sender_ip, target_mac, target_ip)
+        return eth + arp
+
+    def build_ip_udp(src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port, payload, ip_id=12345):
+        eth = build_eth(src_mac, dst_mac, 0x0800)
+        udp_len = 8 + len(payload)
+        ip_total_len = 20 + udp_len
+        ip_hdr_no_chk = struct.pack("!BBHHHBBH4s4s", 0x45, 0, ip_total_len, ip_id, 0x4000, 64, 17, 0, src_ip, dst_ip)
         ip_chk = checksum(ip_hdr_no_chk)
-        ip_hdr = struct.pack("!BBHHHBBH4s4s", 0x45, 0, ip_total_len, 54321, 0x4000, 64, 6, ip_chk, src_ip, dst_ip)
+        ip_hdr = struct.pack("!BBHHHBBH4s4s", 0x45, 0, ip_total_len, ip_id, 0x4000, 64, 17, ip_chk, src_ip, dst_ip)
+        udp_hdr = struct.pack("!HHHH", src_port, dst_port, udp_len, 0)
+        return eth + ip_hdr + udp_hdr + payload
+
+    def build_ip_tcp(src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port, seq, ack, flags, payload=b"", window=64240, ip_id=54321):
+        eth = build_eth(src_mac, dst_mac, 0x0800)
+        ip_total_len = 20 + 20 + len(payload)
+        ip_hdr_no_chk = struct.pack("!BBHHHBBH4s4s", 0x45, 0, ip_total_len, ip_id, 0x4000, 64, 6, 0, src_ip, dst_ip)
+        ip_chk = checksum(ip_hdr_no_chk)
+        ip_hdr = struct.pack("!BBHHHBBH4s4s", 0x45, 0, ip_total_len, ip_id, 0x4000, 64, 6, ip_chk, src_ip, dst_ip)
 
         tcp_offset_res = (5 << 4)
-        tcp_hdr_no_chk = struct.pack("!HHIIBBHHH", src_port, dst_port, seq, ack, tcp_offset_res, flags, 8192, 0, 0)
+        tcp_hdr_no_chk = struct.pack("!HHIIBBHHH", src_port, dst_port, seq, ack, tcp_offset_res, flags, window, 0, 0)
         pseudo_hdr = struct.pack("!4s4sBBH", src_ip, dst_ip, 0, 6, 20 + len(payload))
         tcp_chk = checksum(pseudo_hdr + tcp_hdr_no_chk + payload)
-        tcp_hdr = struct.pack("!HHIIBBHHH", src_port, dst_port, seq, ack, tcp_offset_res, flags, 8192, tcp_chk, 0)
-        return eth_hdr + ip_hdr + tcp_hdr + payload
+        tcp_hdr = struct.pack("!HHIIBBHHH", src_port, dst_port, seq, ack, tcp_offset_res, flags, window, tcp_chk, 0)
+        return eth + ip_hdr + tcp_hdr + payload
 
-    client_ip = bytes([192, 168, 1, 45])
-    server_ip = bytes([192, 168, 1, 100])
-    c_port = 49152
-    s_port = 80
+    def make_dns_query(tx_id, domain):
+        hdr = struct.pack("!HHHHHH", tx_id, 0x0100, 1, 0, 0, 0)
+        qname = b""
+        for part in domain.split("."):
+            qname += struct.pack("!B", len(part)) + part.encode()
+        qname += b"\x00"
+        return hdr + qname + struct.pack("!HH", 1, 1)
 
-    pkt1 = build_eth_ip_tcp(client_ip, server_ip, c_port, s_port, 1000, 0, 0x02, b"")
-    pkt2 = build_eth_ip_tcp(server_ip, client_ip, s_port, c_port, 5000, 1001, 0x12, b"")
-    pkt3 = build_eth_ip_tcp(client_ip, server_ip, c_port, s_port, 1001, 5001, 0x10, b"")
-    
-    http_req = (
-        b"POST /api/v1/internal/login HTTP/1.1\r\n"
-        b"Host: gateway.alpha9.hexatech.local\r\n"
-        b"User-Agent: Mozilla/5.0 (Security-Incident-Monitor)\r\n"
-        b"Content-Type: application/x-www-form-urlencoded\r\n"
-        b"Content-Length: 43\r\n"
+    def make_dns_response(tx_id, domain, ip_bytes):
+        hdr = struct.pack("!HHHHHH", tx_id, 0x8180, 1, 1, 0, 0)
+        qname = b""
+        for part in domain.split("."):
+            qname += struct.pack("!B", len(part)) + part.encode()
+        qname += b"\x00"
+        qtype_qclass = struct.pack("!HH", 1, 1)
+        ans = struct.pack("!HHHIH4s", 0xc00c, 1, 1, 300, 4, ip_bytes)
+        return hdr + qname + qtype_qclass + ans
+
+    gateway_mac = b"\x00\x50\x56\xe1\x82\x93"
+    gateway_ip = bytes([192, 168, 1, 1])
+
+    vance_mac = b"\x00\x0c\x29\x1a\x2b\x3c"
+    vance_ip = bytes([192, 168, 1, 45])  # Workstation HEX-WS-VANCE-04
+
+    syslog_mac = b"\x00\x50\x56\xaa\xbb\xcc"
+    syslog_ip = bytes([192, 168, 1, 10])  # Log Collector
+
+    unusual_relay_ip = bytes([198, 51, 100, 89])  # Unusual destination host
+
+    other_hosts = [
+        (b"\x00\x0c\x29\x22\x33\x44", bytes([192, 168, 1, 15])),
+        (b"\x00\x0c\x29\x55\x66\x77", bytes([192, 168, 1, 20])),
+        (b"\x00\x0c\x29\x88\x99\xaa", bytes([192, 168, 1, 33])),
+        (b"\x00\x0c\x29\xbb\xcc\xdd", bytes([192, 168, 1, 50])),
+        (b"\x00\x0c\x29\xee\xff\x00", bytes([192, 168, 1, 102]))
+    ]
+
+    decoy_domains = [
+        ("api.internal.hexatech.local", bytes([192, 168, 1, 100])),
+        ("auth.gateway.hexatech.local", bytes([192, 168, 1, 2])),
+        ("pool.ntp.org", bytes([162, 159, 200, 1])),
+        ("update.microsoft.com", bytes([20, 112, 52, 29])),
+        ("telemetry.aws.internal", bytes([52, 94, 233, 112])),
+        ("cdn.cloudflare.net", bytes([104, 16, 123, 96])),
+        ("relay-alpha9.c2-network.net", unusual_relay_ip),
+        ("monitoring.hexatech.local", bytes([192, 168, 1, 10]))
+    ]
+
+    pcap_packets = []
+    current_time = 1757348400.0
+
+    def add_pkt(pkt, dt=0.002):
+        nonlocal current_time
+        current_time += dt
+        sec = int(current_time)
+        usec = int((current_time - sec) * 1000000)
+        hdr = struct.pack("<IIII", sec, usec, len(pkt), len(pkt))
+        pcap_packets.append(hdr + pkt)
+
+    # 1. ARP background sweeps
+    for _ in range(80):
+        src_mac, src_ip = random.choice(other_hosts)
+        target_ip = bytes([192, 168, 1, random.randint(2, 250)])
+        add_pkt(build_arp(src_mac, src_ip, b"\x00\x00\x00\x00\x00\x00", target_ip, op=1), dt=0.005)
+        if random.random() < 0.4:
+            add_pkt(build_arp(gateway_mac, target_ip, src_mac, src_ip, op=2), dt=0.001)
+
+    # 2. Decoy DNS lookups
+    for i in range(120):
+        dom, ip_ans = random.choice(decoy_domains)
+        tx_id = 1000 + i
+        src_m, src_i = random.choice(other_hosts + [(vance_mac, vance_ip)])
+        c_port = 40000 + (i % 20000)
+        q = make_dns_query(tx_id, dom)
+        add_pkt(build_ip_udp(src_m, gateway_mac, src_i, gateway_ip, c_port, 53, q), dt=0.002)
+        r = make_dns_response(tx_id, dom, ip_ans)
+        add_pkt(build_ip_udp(gateway_mac, src_m, gateway_ip, src_i, 53, c_port, r), dt=0.001)
+
+    # 3. Decoy TLS Sessions (port 443)
+    for sess in range(60):
+        src_m, src_i = random.choice(other_hosts)
+        dst_ip = bytes([52, random.randint(10, 100), random.randint(10, 200), random.randint(1, 250)])
+        c_port = 50000 + sess
+        s_port = 443
+        seq_c = 10000 + sess * 5000
+        seq_s = 60000 + sess * 5000
+
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, 0, 0x02), dt=0.001)
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c + 1, 0x12), dt=0.001)
+        seq_c += 1
+        seq_s += 1
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x10), dt=0.001)
+
+        client_hello = b"\x16\x03\x03\x00\x95\x01\x00\x00\x91\x03\x03" + (b"\x11" * 135)
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x18, client_hello), dt=0.002)
+        seq_c += len(client_hello)
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c, 0x10), dt=0.001)
+
+        server_hello = b"\x16\x03\x03\x00\x55\x02\x00\x00\x51\x03\x03" + (b"\x22" * 71)
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c, 0x18, server_hello), dt=0.002)
+        seq_s += len(server_hello)
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x10), dt=0.001)
+
+        for _ in range(random.randint(4, 8)):
+            app_data_c = b"\x17\x03\x03\x00\x80" + (b"\x33" * 128)
+            add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x18, app_data_c), dt=0.002)
+            seq_c += len(app_data_c)
+            app_data_s = b"\x17\x03\x03\x01\x00" + (b"\x44" * 256)
+            add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c, 0x18, app_data_s), dt=0.002)
+            seq_s += len(app_data_s)
+
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x11), dt=0.001)
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c + 1, 0x11), dt=0.001)
+
+    # 4. Decoy HTTP Traffic (port 80)
+    decoy_uris = [
+        b"GET /favicon.ico HTTP/1.1\r\nHost: intranet.hexatech.local\r\n\r\n",
+        b"GET /healthz HTTP/1.1\r\nHost: cluster.hexatech.local\r\n\r\n",
+        b"GET /static/styles.css HTTP/1.1\r\nHost: intranet.hexatech.local\r\n\r\n",
+        b"GET /api/v1/metrics HTTP/1.1\r\nHost: monitoring.hexatech.local\r\n\r\n",
+        b"GET /portal/status HTTP/1.1\r\nHost: gateway.hexatech.local\r\n\r\n",
+    ]
+    for h_sess in range(70):
+        src_m, src_i = random.choice(other_hosts)
+        dst_ip = bytes([192, 168, 1, 100])
+        c_port = 45000 + h_sess
+        s_port = 80
+        seq_c = 20000 + h_sess * 4000
+        seq_s = 70000 + h_sess * 4000
+
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, 0, 0x02), dt=0.001)
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c + 1, 0x12), dt=0.001)
+        seq_c += 1
+        seq_s += 1
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x10), dt=0.001)
+
+        req_payload = random.choice(decoy_uris)
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x18, req_payload), dt=0.002)
+        seq_c += len(req_payload)
+
+        resp_payload = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nOK System Up\n"
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c, 0x18, resp_payload), dt=0.002)
+        seq_s += len(resp_payload)
+
+        add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, s_port, seq_c, seq_s, 0x11), dt=0.001)
+        add_pkt(build_ip_tcp(gateway_mac, src_m, dst_ip, src_i, s_port, c_port, seq_s, seq_c + 1, 0x11), dt=0.001)
+
+    # 5. SUSPICIOUS STREAM: Unencrypted HTTP POST split across TCP segments (Table 10)
+    # Client: 192.168.1.45:51240 -> Unusual Destination: 198.51.100.89:80
+    exfil_c_port = 51240
+    exfil_s_port = 80
+    exfil_seq_c = 100000
+    exfil_seq_s = 500000
+
+    add_pkt(build_ip_tcp(vance_mac, gateway_mac, vance_ip, unusual_relay_ip, exfil_c_port, exfil_s_port, exfil_seq_c, 0, 0x02), dt=0.005)
+    add_pkt(build_ip_tcp(gateway_mac, vance_mac, unusual_relay_ip, vance_ip, exfil_s_port, exfil_c_port, exfil_seq_s, exfil_seq_c + 1, 0x12), dt=0.002)
+    exfil_seq_c += 1
+    exfil_seq_s += 1
+    add_pkt(build_ip_tcp(vance_mac, gateway_mac, vance_ip, unusual_relay_ip, exfil_c_port, exfil_s_port, exfil_seq_c, exfil_seq_s, 0x10), dt=0.001)
+
+    # Segment 1: Headers and first part of JSON
+    post_part1 = (
+        b"POST /api/v1/telemetry/dispatch HTTP/1.1\r\n"
+        b"Host: relay-alpha9.c2-network.net\r\n"
+        b"User-Agent: ExfilAgent/3.1 (Aegis-Breach-Automation)\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 428\r\n"
+        b"Connection: keep-alive\r\n"
         b"\r\n"
-        b"username=adm_secops&password=Compromised2026!"
+        b"{\n"
+        b"  \"source\": \"HEX-WS-VANCE-04\",\n"
+        b"  \"timestamp\": \"2026-08-14T03:42:11Z\",\n"
+        b"  \"node_id\": \"MV-4092\",\n"
+        b"  \"telemetry_archive\": \"substation_alpha9_dump.enc\",\n"
+        b"  \"status\": \"EGRESS_BURST_COMPLETE\",\n"
+        b"  \"session_token\": \"s_9921_adm_token_hex\",\n"
     )
-    pkt4 = build_eth_ip_tcp(client_ip, server_ip, c_port, s_port, 1001, 5001, 0x18, http_req)
+    add_pkt(build_ip_tcp(vance_mac, gateway_mac, vance_ip, unusual_relay_ip, exfil_c_port, exfil_s_port, exfil_seq_c, exfil_seq_s, 0x18, post_part1), dt=0.004)
+    exfil_seq_c += len(post_part1)
+
+    add_pkt(build_ip_tcp(gateway_mac, vance_mac, unusual_relay_ip, vance_ip, exfil_s_port, exfil_c_port, exfil_seq_s, exfil_seq_c, 0x10), dt=0.002)
+
+    # Segment 2: Remaining body with the FLAG
+    post_part2 = (
+        b"  \"flag\": \"CTF{un3ncrypt3d_tr4ff1c_l34k}\",\n"
+        b"  \"wipe_schedule\": \"IMMEDIATE_LOCAL_STORAGE_SCRUB\",\n"
+        b"  \"destination_cluster\": \"C2-RELAY-NODE-OMEGA\",\n"
+        b"  \"verification_digest\": \"d41d8cd98f00b204e9800998ecf8427e\"\n"
+        b"}\n"
+    )
+    add_pkt(build_ip_tcp(vance_mac, gateway_mac, vance_ip, unusual_relay_ip, exfil_c_port, exfil_s_port, exfil_seq_c, exfil_seq_s, 0x18, post_part2), dt=0.003)
+    exfil_seq_c += len(post_part2)
 
     http_resp = (
         b"HTTP/1.1 200 OK\r\n"
-        b"Server: HexaTech-Gateway/1.4.2\r\n"
+        b"Server: nginx/1.24.0 (Relay-Node)\r\n"
         b"Content-Type: application/json\r\n"
-        b"X-Incident-Trace: 0x99482\r\n"
-        b"Content-Length: 178\r\n"
+        b"Content-Length: 72\r\n"
+        b"Connection: close\r\n"
         b"\r\n"
-        b"{\"status\":\"authenticated\",\"role\":\"administrator\",\"session\":\"s_9921_adm\",\"flag\":\"CTF{un3ncrypt3d_tr4ff1c_l34k}\",\"wipe_status\":\"Workstation HEX-WS-VANCE-04 wiping in progress\"}\n"
+        b"{\"status\":\"ACCEPTED\",\"bytes_received\":428,\"dispatch_code\":\"DISPATCH-OK-99\"}\n"
     )
-    pkt5 = build_eth_ip_tcp(server_ip, client_ip, s_port, c_port, 5001, 1001 + len(http_req), 0x18, http_resp)
-    pkt6 = build_eth_ip_tcp(client_ip, server_ip, c_port, s_port, 1001 + len(http_req), 5001 + len(http_resp), 0x11, b"")
+    add_pkt(build_ip_tcp(gateway_mac, vance_mac, unusual_relay_ip, vance_ip, exfil_s_port, exfil_c_port, exfil_seq_s, exfil_seq_c, 0x18, http_resp), dt=0.005)
+    exfil_seq_s += len(http_resp)
+
+    add_pkt(build_ip_tcp(gateway_mac, vance_mac, unusual_relay_ip, vance_ip, exfil_s_port, exfil_c_port, exfil_seq_s, exfil_seq_c, 0x11), dt=0.001)
+    add_pkt(build_ip_tcp(vance_mac, gateway_mac, vance_ip, unusual_relay_ip, exfil_c_port, exfil_s_port, exfil_seq_c, exfil_seq_s + 1, 0x11), dt=0.001)
+
+    # 6. SECOND TARGET STREAM: Workstation Wipe Confirmation Stream (Bridge to Stage 6)
+    wipe_c_port = 51242
+    wipe_s_port = 8080
+    wipe_seq_c = 200000
+    wipe_seq_s = 600000
+
+    add_pkt(build_ip_tcp(vance_mac, syslog_mac, vance_ip, syslog_ip, wipe_c_port, wipe_s_port, wipe_seq_c, 0, 0x02), dt=0.004)
+    add_pkt(build_ip_tcp(syslog_mac, vance_mac, syslog_ip, vance_ip, wipe_s_port, wipe_c_port, wipe_seq_s, wipe_seq_c + 1, 0x12), dt=0.002)
+    wipe_seq_c += 1
+    wipe_seq_s += 1
+    add_pkt(build_ip_tcp(vance_mac, syslog_mac, vance_ip, syslog_ip, wipe_c_port, wipe_s_port, wipe_seq_c, wipe_seq_s, 0x10), dt=0.001)
+
+    wipe_req = (
+        b"POST /api/internal/syslog HTTP/1.1\r\n"
+        b"Host: logging.hexatech.local:8080\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 312\r\n"
+        b"\r\n"
+        b"{\n"
+        b"  \"facility\": \"SECURITY_ALERT\",\n"
+        b"  \"severity\": \"EMERGENCY\",\n"
+        b"  \"hostname\": \"HEX-WS-VANCE-04\",\n"
+        b"  \"action\": \"LOCAL_STORAGE_SCRUB\",\n"
+        b"  \"executed_command\": \"dd if=/dev/urandom of=/dev/nvme0n1 bs=4M count=8\",\n"
+        b"  \"forensics_note\": \"Workstation drive quick wipe triggered before departure. File pointers removed at unallocated cluster offset 0x8000.\"\n"
+        b"}\n"
+    )
+    add_pkt(build_ip_tcp(vance_mac, syslog_mac, vance_ip, syslog_ip, wipe_c_port, wipe_s_port, wipe_seq_c, wipe_seq_s, 0x18, wipe_req), dt=0.004)
+    wipe_seq_c += len(wipe_req)
+
+    wipe_resp = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 29\r\n"
+        b"\r\n"
+        b"{\"logged\":true,\"id\":109482}\n"
+    )
+    add_pkt(build_ip_tcp(syslog_mac, vance_mac, syslog_ip, vance_ip, wipe_s_port, wipe_c_port, wipe_seq_s, wipe_seq_c, 0x18, wipe_resp), dt=0.003)
+    wipe_seq_s += len(wipe_resp)
+
+    add_pkt(build_ip_tcp(vance_mac, syslog_mac, vance_ip, syslog_ip, wipe_c_port, wipe_s_port, wipe_seq_c, wipe_seq_s, 0x11), dt=0.001)
+    add_pkt(build_ip_tcp(syslog_mac, vance_mac, syslog_ip, vance_ip, wipe_s_port, wipe_c_port, wipe_seq_s, wipe_seq_c + 1, 0x11), dt=0.001)
+
+    # 7. Decoy traffic loop until exactly 3,000 packets
+    while len(pcap_packets) < 3000:
+        choice = random.random()
+        if choice < 0.25:
+            src_m, src_i = random.choice(other_hosts)
+            target_ip = bytes([192, 168, 1, random.randint(2, 250)])
+            add_pkt(build_arp(src_m, src_i, b"\x00\x00\x00\x00\x00\x00", target_ip, op=1), dt=0.002)
+        elif choice < 0.55:
+            dom, ip_ans = random.choice(decoy_domains[:6])
+            tx_id = random.randint(10000, 60000)
+            src_m, src_i = random.choice(other_hosts)
+            c_port = random.randint(30000, 60000)
+            q = make_dns_query(tx_id, dom)
+            add_pkt(build_ip_udp(src_m, gateway_mac, src_i, gateway_ip, c_port, 53, q), dt=0.001)
+            r = make_dns_response(tx_id, dom, ip_ans)
+            add_pkt(build_ip_udp(gateway_mac, src_m, gateway_ip, src_i, 53, c_port, r), dt=0.001)
+        else:
+            src_m, src_i = random.choice(other_hosts)
+            dst_ip = bytes([192, 168, 1, 100])
+            c_port = random.randint(30000, 60000)
+            seq = random.randint(100000, 900000)
+            ack = random.randint(100000, 900000)
+            add_pkt(build_ip_tcp(src_m, gateway_mac, src_i, dst_ip, c_port, 80, seq, ack, 0x10), dt=0.001)
 
     pcap_data = bytearray(global_hdr)
-    t_sec = 1757348400
-    t_usec = 100000
-    for p in [pkt1, pkt2, pkt3, pkt4, pkt5, pkt6]:
-        pkt_hdr = struct.pack("<IIII", t_sec, t_usec, len(p), len(p))
-        pcap_data.extend(pkt_hdr)
+    for p in pcap_packets:
         pcap_data.extend(p)
-        t_usec += 25000
 
     for target_dir in [
         os.path.join(CHALLENGES_DIR, "stage5-network"),
@@ -386,7 +651,7 @@ def make_pcap():
             f.write(pcap_data)
 
     record_manifest("incident_traffic.pcap", pcap_data)
-    print(f"[+] Created Stage 5 PCAP ({len(pcap_data)} bytes)")
+    print(f"[+] Created Stage 5 PCAP ({len(pcap_data)} bytes, {len(pcap_packets)} packets) with realistic decoys and segmented exfiltration")
 
 # -------------------------------------------------------------
 # Stage 6: Forensics - disk_evidence.raw
@@ -398,47 +663,169 @@ def make_pcap():
 #   Sabotage Tool: countdown.elf
 # -------------------------------------------------------------
 def make_forensics_disk():
-    size = 512 * 1024  # 512 KB
-    disk = bytearray(b"\x00" * size)
+    # 32 MB FAT32 raw disk image per Table 11 specification (33,554,432 bytes)
+    total_bytes = 32 * 1024 * 1024
+    disk = bytearray(b"\x00" * total_bytes)
 
-    # MBR Signature at offset 510
-    disk[510] = 0x55
-    disk[511] = 0xAA
+    bytes_per_sec = 512
+    sec_per_clus = 8  # 4 KB per cluster
+    res_secs = 32
+    num_fats = 2
+    total_secs = total_bytes // bytes_per_sec  # 65536 sectors
+    sec_per_fat = 512
+    root_clus = 2
 
-    notice = (
-        b"HEXATECH WORKSTATION IMAGE - VOL D: FORENSIC ACQUISITION\n"
-        b"Host: HEX-WS-VANCE-04\n"
-        b"Timestamp: 2026-08-14 02:45:00 UTC\n"
-        b"Filesystem: EXT4 / FAT32 HYBRID SECTOR DUMP\n"
-    )
-    disk[1024:1024+len(notice)] = notice
+    # Sector 0: Boot Sector (BPB)
+    bs = bytearray(512)
+    bs[0:3] = b"\xeb\x58\x90"
+    bs[3:11] = b"MSWIN4.1"
+    struct.pack_into("<H", bs, 11, bytes_per_sec)
+    bs[13] = sec_per_clus
+    struct.pack_into("<H", bs, 14, res_secs)
+    bs[16] = num_fats
+    struct.pack_into("<H", bs, 17, 0)
+    struct.pack_into("<H", bs, 19, 0)
+    bs[21] = 0xF8  # Fixed disk
+    struct.pack_into("<H", bs, 22, 0)
+    struct.pack_into("<H", bs, 24, 63)
+    struct.pack_into("<H", bs, 26, 255)
+    struct.pack_into("<I", bs, 28, 0)
+    struct.pack_into("<I", bs, 32, total_secs)
+    struct.pack_into("<I", bs, 36, sec_per_fat)
+    struct.pack_into("<H", bs, 40, 0)
+    struct.pack_into("<H", bs, 42, 0)
+    struct.pack_into("<I", bs, 44, root_clus)
+    struct.pack_into("<H", bs, 48, 1)  # FSInfo sector
+    struct.pack_into("<H", bs, 50, 6)  # Backup boot sector
+    bs[66] = 0x29
+    struct.pack_into("<I", bs, 67, 0x12345678)
+    bs[71:82] = b"EVIDENCE   "
+    bs[82:90] = b"FAT32   "
+    bs[510:512] = b"\x55\xaa"
+    disk[0:512] = bs
 
-    inode_info = (
-        b"INODE 001: system.journal (allocated)\n"
-        b"INODE 002: docker-compose.yml (allocated)\n"
-        b"INODE 003: forensic_evidence.bak (DELETED // UNALLOCATED SECTOR 0x8000)\n"
-        b"INODE 004: countdown.elf (ARCHIVED IN BACKUP // STAGE 7 PROGRAM)\n"
-    )
-    disk[2048:2048+len(inode_info)] = inode_info
+    # Sector 1: FSInfo Sector
+    fsi = bytearray(512)
+    fsi[0:4] = b"RRaA"
+    fsi[484:488] = b"rrAa"
+    struct.pack_into("<I", fsi, 488, 7000)
+    struct.pack_into("<I", fsi, 492, 11)
+    fsi[510:512] = b"\x55\xaa"
+    disk[512:1024] = fsi
 
-    carved_artifact = (
-        b"\n--- [BEGIN FILE RECOVERY: forensic_evidence.bak] ---\n"
-        b"Owner: Marcus Vance (UID 1002 // SecOps Infrastructure)\n"
-        b"Status: Carved cluster stream from unallocated sector 0x8000\n"
-        b"Flag: CTF{f1l3_c4rv1ng_m4st3r}\n"
-        b"\n"
-        b"[HEXATECH CORE MAINFRAME TERMINAL ACCESS]\n"
-        b"Host: aegis-core (Port 2222 SSH / Port 8086 Web Console)\n"
-        b"Account Username: player\n"
-        b"Account Password: AegisAccess#2026\n"
-        b"\n"
-        b"[ATTACHED SABOTAGE CONTROLLER: countdown.elf]\n"
-        b"Marcus's compiled x86-64 countdown binary was archived here.\n"
-        b"Reverse engineer countdown.elf to extract the emergency authorization phrase.\n"
-        b"The authorization phrase is strictly required to disarm the mainframe in Stage 8!\n"
-        b"--- [END FILE RECOVERY] ---\n"
-    )
-    disk[32768:32768+len(carved_artifact)] = carved_artifact
+    # Sector 6: Backup boot sector
+    disk[6*512:7*512] = bs
+
+    # Offsets
+    fat1_offset = res_secs * bytes_per_sec
+    fat2_offset = fat1_offset + (sec_per_fat * bytes_per_sec)
+    data_start = fat2_offset + (sec_per_fat * bytes_per_sec)
+
+    def set_fat_entry(fat_num, clus, val):
+        offset = fat1_offset if fat_num == 1 else fat2_offset
+        clus_offset = offset + (clus * 4)
+        struct.pack_into("<I", disk, clus_offset, val & 0x0FFFFFFF)
+
+    # Initialize FAT: reserved clusters 0, 1, and allocated clusters 2, 3, 4, 5
+    for f in [1, 2]:
+        set_fat_entry(f, 0, 0x0FFFFFF8)
+        set_fat_entry(f, 1, 0x0FFFFFFF)
+        set_fat_entry(f, 2, 0x0FFFFFFF)  # Root dir
+        set_fat_entry(f, 3, 0x0FFFFFFF)  # README.TXT
+        set_fat_entry(f, 4, 0x0FFFFFFF)  # CONFIG.JSON
+        set_fat_entry(f, 5, 0x0FFFFFFF)  # AUDIT.LOG
+        # Cluster 10 (deleted archive forensic_evidence.bak) is intentionally 0 (UNALLOCATED!)
+
+    # Read countdown.elf binary
+    elf_candidates = [
+        os.path.join(CHALLENGES_DIR, "stage7-re", "countdown.elf"),
+        os.path.join(FRONTEND_PUBLIC_ARTIFACTS, "countdown.elf")
+    ]
+    elf_data = None
+    for cand in elf_candidates:
+        if os.path.exists(cand):
+            with open(cand, "rb") as f:
+                elf_data = f.read()
+            break
+    if not elf_data:
+        elf_data = b"\x7fELF" + b"\x00" * 2048
+
+    # Create notes.txt with credentials and flag
+    notes_content = (
+        "========================================================================\n"
+        "HEXATECH INCIDENT RESPONSE - FORENSIC RECOVERY: forensic_evidence.bak\n"
+        "Recovered from: Workstation HEX-WS-VANCE-04 (Unallocated Storage Sector)\n"
+        "========================================================================\n\n"
+        "FORENSIC VERIFICATION FLAG:\n"
+        "Flag: CTF{f1l3_c4rv1ng_m4st3r}\n\n"
+        "CORE MAINFRAME ACCESS CREDENTIALS (STAGE 8):\n"
+        "Host: aegis-core (Port 2222 SSH / Port 8086 Web Console)\n"
+        "Username: player\n"
+        "Password: AegisAccess#2026\n\n"
+        "ATTACHED INVESTIGATION ARTIFACT:\n"
+        "Marcus's compiled countdown sabotage binary (countdown.elf) is included\n"
+        "in this archive. Reverse engineer countdown.elf in Stage 7 to extract the\n"
+        "emergency authorization phrase needed to disarm the mainframe in Stage 8!\n"
+    ).encode("utf-8")
+
+    # Build the deleted archive (forensic_evidence.bak - standard tar.gz)
+    tar_buf = io.BytesIO()
+    with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+        ti_notes = tarfile.TarInfo(name="forensic_notes.txt")
+        ti_notes.size = len(notes_content)
+        ti_notes.mode = 0o644
+        tar.addfile(ti_notes, io.BytesIO(notes_content))
+
+        ti_elf = tarfile.TarInfo(name="countdown.elf")
+        ti_elf.size = len(elf_data)
+        ti_elf.mode = 0o755
+        tar.addfile(ti_elf, io.BytesIO(elf_data))
+
+    archive_data = tar_buf.getvalue()
+
+    def make_dir_entry(name_ext, attr, start_clus, file_size, deleted=False):
+        entry = bytearray(32)
+        name_bytes = name_ext.encode("ascii")
+        if deleted:
+            entry[0] = 0xE5
+            entry[1:11] = name_bytes[1:11]
+        else:
+            entry[0:11] = name_bytes
+        entry[11] = attr
+        struct.pack_into("<H", entry, 20, (start_clus >> 16) & 0xFFFF)
+        struct.pack_into("<H", entry, 26, start_clus & 0xFFFF)
+        struct.pack_into("<I", entry, 28, file_size)
+        return entry
+
+    root_offset = data_start + ((root_clus - 2) * sec_per_clus * bytes_per_sec)
+
+    readme_data = b"HEXATECH WORKSTATION IMAGE // FORENSIC EXTRACTION\r\nPrimary volume for Marcus Vance (HEX-WS-VANCE-04).\r\n"
+    config_data = b'{"station":"Alpha-9","assigned_engineer":"Marcus Vance","status":"offline"}\r\n'
+    audit_data = b"2026-08-14 02:44:00 Station dismounted. Storage controller flushed.\r\n"
+
+    entries = bytearray()
+    entries.extend(make_dir_entry("EVIDENCE   ", 0x08, 0, 0))
+    entries.extend(make_dir_entry("README  TXT", 0x20, 3, len(readme_data)))
+    entries.extend(make_dir_entry("CONFIG  JSO", 0x20, 4, len(config_data)))
+    entries.extend(make_dir_entry("AUDIT   LOG", 0x20, 5, len(audit_data)))
+    # Deleted entry for forensic_evidence.bak pointing to unallocated Cluster 10
+    entries.extend(make_dir_entry("FORENSICBAK", 0x20, 10, len(archive_data), deleted=True))
+
+    disk[root_offset:root_offset+len(entries)] = entries
+
+    # Write active file data
+    c3_offset = data_start + ((3 - 2) * sec_per_clus * bytes_per_sec)
+    disk[c3_offset:c3_offset+len(readme_data)] = readme_data
+
+    c4_offset = data_start + ((4 - 2) * sec_per_clus * bytes_per_sec)
+    disk[c4_offset:c4_offset+len(config_data)] = config_data
+
+    c5_offset = data_start + ((5 - 2) * sec_per_clus * bytes_per_sec)
+    disk[c5_offset:c5_offset+len(audit_data)] = audit_data
+
+    # Write deleted archive data into unallocated Cluster 10
+    c10_offset = data_start + ((10 - 2) * sec_per_clus * bytes_per_sec)
+    disk[c10_offset:c10_offset+len(archive_data)] = archive_data
 
     for target_dir in [
         os.path.join(CHALLENGES_DIR, "stage6-forensics"),
@@ -450,7 +837,7 @@ def make_forensics_disk():
             f.write(disk)
 
     record_manifest("disk_evidence.raw", disk)
-    print(f"[+] Created Stage 6 Raw Disk ({len(disk)} bytes)")
+    print(f"[+] Created Stage 6 Raw Disk ({len(disk)} bytes, 32 MB FAT32) with unallocated deleted archive")
 
 # -------------------------------------------------------------
 # Stage 7: Reverse Engineering - countdown.elf & countdown.c
@@ -597,21 +984,25 @@ if __name__ == "__main__":
         elf_bytes.extend(b"\x90" * padding)
     elf_bytes.extend(payload)
 
-    for target_dir in [
-        os.path.join(CHALLENGES_DIR, "stage7-re"),
-        FRONTEND_PUBLIC_ARTIFACTS,
-        BACKEND_STATIC_ARTIFACTS
-    ]:
-        with open(os.path.join(target_dir, "countdown.c"), "w", encoding="utf-8") as f:
-            f.write(c_source)
-        with open(os.path.join(target_dir, "solver.py"), "w", encoding="utf-8") as f:
-            f.write(solver_py)
-        with open(os.path.join(target_dir, "countdown.elf"), "wb") as f:
+    # Keep reference source and solver only in internal challenge dev directory
+    target_internal = os.path.join(CHALLENGES_DIR, "stage7-re")
+    with open(os.path.join(target_internal, "solver.py"), "w", encoding="utf-8") as f:
+        f.write(solver_py)
+
+    elf_src = os.path.join(target_internal, "countdown.elf")
+    if os.path.exists(elf_src):
+        with open(elf_src, "rb") as f:
+            elf_bytes = f.read()
+    else:
+        # Fallback dummy ELF if not yet compiled
+        elf_bytes = b"\x7fELF" + b"\x00" * 2048
+
+    for pub_dir in [FRONTEND_PUBLIC_ARTIFACTS, BACKEND_STATIC_ARTIFACTS]:
+        with open(os.path.join(pub_dir, "countdown.elf"), "wb") as f:
             f.write(elf_bytes)
 
-    record_manifest("countdown.c", c_source.encode())
     record_manifest("countdown.elf", elf_bytes)
-    print(f"[+] Created Stage 7 Reverse Engineering artifacts ({len(elf_bytes)} bytes ELF)")
+    print(f"[+] Deployed Stage 7 Reverse Engineering binary ({len(elf_bytes)} bytes ELF)")
 
 # -------------------------------------------------------------
 # Stage 8: Capstone Target Script - halt_console
@@ -691,8 +1082,8 @@ if __name__ == "__main__":
     make_badge_png()
     make_crypto()
     make_pcap()
-    make_forensics_disk()
     make_reverse_engineering()
+    make_forensics_disk()
     make_stage8_script()
 
     # Save manifest

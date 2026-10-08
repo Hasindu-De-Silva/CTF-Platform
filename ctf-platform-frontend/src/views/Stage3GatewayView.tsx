@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Key, AlertCircle, CheckCircle2, Copy, Check, ArrowLeft, Terminal } from 'lucide-react';
+import { Shield, Key, CheckCircle2, Copy, Check, ArrowLeft, Terminal } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Stage3GatewayView: React.FC = () => {
@@ -85,13 +85,6 @@ export const Stage3GatewayView: React.FC = () => {
         {!authenticatedUser ? (
           /* Login Form */
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <strong>Story Clue (from Stage 2):</strong> Decrypted transmission notes state: <em>"The perimeter authentication script evaluates raw SQL without parameterization. Force the boolean clause to bypass."</em>
-              </div>
-            </div>
-
             <div>
               <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
                 Employee Username / Service ID
@@ -100,7 +93,7 @@ export const Stage3GatewayView: React.FC = () => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. admin' OR '1'='1"
+                placeholder="e.g. j_doe or admin"
                 required
                 autoFocus
                 className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"

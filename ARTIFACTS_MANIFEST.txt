@@ -24,12 +24,8 @@ Artifact: intercepted_payload.txt
   SHA-256: 7891fb0864b686fe02cb42668feb6f586f29465c3eedddedf680bfc809214c02
 
 Artifact: incident_traffic.pcap
-  Size: 994 bytes
-  SHA-256: be21641ee59aefdc9a874c8d0b9cb73e4a52996cbb62821b1aa0472009faf40b
-
-Artifact: disk_evidence.raw
-  Size: 524288 bytes
-  SHA-256: d510f397886088b333b7d25e64d266a291333482641541f63d256f625c4d2ea4
+  Size: 395617 bytes
+  SHA-256: 6c86c5e42ab784ca5bd384cedc5e214d426976caeb05ee7cf45b6fd7c5360c19
 
 Artifact: countdown.c
   Size: 2110 bytes
@@ -38,6 +34,10 @@ Artifact: countdown.c
 Artifact: countdown.elf
   Size: 4474 bytes
   SHA-256: 4bac417dba8f1f6f8788380fd9ce82b9b54c7cd1a4d37d6c5de1bedb3af82eb1
+
+Artifact: disk_evidence.raw
+  Size: 33554432 bytes
+  SHA-256: ad3fe1c954b7598cba13b4cc5e22af185daba667d40bec9f10a9f3ebe95a3972
 
 Artifact: halt_console
   Size: 1668 bytes

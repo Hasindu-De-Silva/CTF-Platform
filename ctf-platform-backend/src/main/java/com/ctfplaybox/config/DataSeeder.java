@@ -75,41 +75,41 @@ public class DataSeeder implements CommandLineRunner {
         // Stage 4: Web Security (150 pts)
         upsertChallenge(4, "Perimeter Gateway Infiltration",
                 "Web Security", "Moderate",
-                "The decrypted C2 transmission revealed that Marcus Vance still maintains backdoor credentials into the HexaTech Perimeter Gateway portal at Substation Alpha-9.\n\nThe gateway login portal dynamically concatenates user input into SQL queries without parameterization (`SELECT * FROM employees WHERE username = '...' AND password = '...'`).\n\nLaunch the in-app Gateway Portal, exploit the authentication SQL injection vulnerability (' OR '1'='1) to access the administrator dashboard, recover the web flag, and locate the reference to the egress traffic capture.",
-                "Analyze how raw input alters boolean SQL evaluation. Craft an authentication bypass expression.",
-                "The gateway builds its login check from what you type without parameterization.",
-                "Try characters with special SQL meaning; think about the WHERE clause evaluate-to-true logic.",
-                "A condition always true in the username field (' OR '1'='1 or ' OR 1=1 --) returns the administrator row.",
+                "The decrypted C2 transmission revealed that Marcus Vance still maintains credentials into the HexaTech Perimeter Gateway portal at Substation Alpha-9.\n\nInfiltrate the perimeter gateway, analyze the login authentication mechanism, bypass authentication to gain administrator access, recover the flag from the configuration records, and locate the reference to the egress network capture.",
+                "The gateway builds its login check from what you type.",
+                "The gateway builds its login check from what you type.",
+                "Try characters with special SQL meaning; think about the WHERE clause.",
+                "A condition always true in the username field returns the admin row.",
                 150, "CTF{sql1_auth_byp4ss_succ3ss}", null, "/stage4-gateway");
 
         // Stage 5: Networking (200 pts)
         upsertChallenge(5, "The Wiretap Chronicle",
                 "Networking", "Moderate-Hard",
                 "On the compromised gateway dashboard, you recovered an automated wiretap capture (`incident_traffic.pcap`) recording Marcus's outbound network traffic.\n\nOpen the capture in Wireshark, analyze network protocols, filter out decoy noise, follow the unencrypted HTTP conversation, and reassemble the payload to extract the exfiltration flag and locate proof that Marcus wiped his workstation hard drive.",
-                "Filter for HTTP POST requests or sort conversations by byte volume in Wireshark.",
-                "Most traffic is noise. Look for an unusual destination or port.",
-                "Use conversation statistics, then filter HTTP requests that send data (POST /api/v1/internal/login).",
-                "Follow the POST's TCP stream; the flag is in the reassembled JSON response body.",
+                "Most traffic is noise. Look for an unusual destination.",
+                "Most traffic is noise. Look for an unusual destination.",
+                "Use conversation statistics, then filter HTTP requests that send data.",
+                "Follow the POST's TCP stream; the flag is in the reassembled body.",
                 200, "CTF{un3ncrypt3d_tr4ff1c_l34k}", "/artifacts/incident_traffic.pcap", null);
 
         // Stage 6: Digital Forensics (250 pts)
         upsertChallenge(6, "The Deleted Storage Sector",
                 "Digital Forensics", "Hard",
                 "Acting on the wipe evidence uncovered in Stage 5, forensic technicians imaged Marcus's workstation hard drive (`disk_evidence.raw`).\n\nMarcus ran a quick wipe sequence before fleeing, leaving raw cluster records intact in unallocated sectors. Perform file carving or forensic analysis to reconstruct `forensic_evidence.bak`.\n\nRecover the forensics flag, discover the temporary mainframe terminal credentials for user 'player', and extract Marcus's compiled sabotage binary (`countdown.elf`).",
-                "File deletion clears pointers, leaving raw cluster bytes in unallocated space. Carve or extract strings from offset 0x8000.",
                 "Deleting a file removes the pointer, not necessarily the data.",
-                "Use a forensic tool to list deleted entries, or carve by signature at sector offset 0x8000.",
-                "List deleted files with fls or carve with dd/foremost at offset 32768 (0x8000), unpack the backup archive, and read notes.",
+                "Deleting a file removes the pointer, not necessarily the data.",
+                "Use a forensic tool to list deleted entries, or carve by signature.",
+                "List deleted files with fls, recover with icat, then unpack.",
                 250, "CTF{f1l3_c4rv1ng_m4st3r}", "/artifacts/disk_evidence.raw", null);
 
         // Stage 7: Reverse Engineering (250 pts)
         upsertChallenge(7, "The Sabotage Binary",
                 "Reverse Engineering", "Hard",
                 "Inside the carved forensic backup from Stage 6, you recovered Marcus's compiled Linux executable (`countdown.elf`). This stripped x86-64 binary manages the HexaTech Core Grid sabotage timer.\n\nThe binary enforces an input verification loop: it reads an emergency authorization phrase, performs a byte-wise transform against a hardcoded lookup table, and validates the result.\n\nReverse engineer the binary using static analysis or the in-app Binary Workbench, recover the reverse engineering flag, and obtain the authorization phrase required to disarm the mainframe in Stage 8.",
-                "Disassemble the binary with Ghidra/objdump or use the in-app Binary Workbench to reverse the byte-wise transform table.",
                 "Not all of the answer is in the file. Look at what the program does with your input.",
-                "Find the function reading the phrase; study its per-byte transform loop and XOR/shift constants.",
-                "Reverse the per-byte transform against the stored table to obtain the authorization phrase (AEGIS-HALT-2026-OMEGA).",
+                "Not all of the answer is in the file. Look at what the program does with your input.",
+                "Find the function reading the phrase; study its per-byte transform loop.",
+                "Reverse the per-byte transform against the stored table to get the phrase.",
                 250, "CTF{r3v3rs3_3ng1n33r_m4st3r}", "/artifacts/countdown.elf", "/stage7-binary");
 
         // Stage 8: Linux / System Security (300 pts)

@@ -25,7 +25,8 @@ ctf-platform-backend/*.war
 ctf-platform-backend/.mvn/wrapper/maven-wrapper.jar
 
 # Frontend / Vite / Node.js
-ctf-platform-frontend/node_modules/
+node_modules/
+**/node_modules/
 ctf-platform-frontend/dist/
 ctf-platform-frontend/dist-ssr/
 ctf-platform-frontend/.vite/

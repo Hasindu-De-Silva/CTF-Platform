@@ -31,9 +31,9 @@ Stage 8: Core Mainframe  ◄── Stage 7: Sabotage Binary ◄── Stage 6: W
 | **01** | **OSINT / Recon** | *The Public Footprint* | **Easy** | 100 | Interactive: `/stage1-osint` | Inspect Marcus's public employee profile and archived forum thread to correlate his alias and assemble the verification flag. |
 | **02** | **Steganography** | *The Abandoned Badge* | **Easy** | 100 | Download: `evidence_badge.png` | Extract LSB UTF-8 note containing the flag and Stage 3 C2 channel key (`AEGIS_KEY_4092`); ignore Base64 EXIF decoy. |
 | **03** | **Cryptography** | *The C2 Intercept* | **Moderate** | 150 | Download: `intercepted_payload.txt` | Decode outer Base64 and decrypt polyalphabetic Vigenère cipher using the Stage 2 key to reveal gateway portal coordinates. |
-| **04** | **Web Security** | *Perimeter Gateway Infiltration* | **Moderate** | 150 | Interactive: `/stage4-gateway` | Exploit unparameterized SQL injection (`' OR '1'='1`) to bypass login, capture the web flag, and locate egress network capture. |
+| **04** | **Web Security** | *Perimeter Gateway Infiltration* | **Moderate** | 150 | Interactive: `/stage4-gateway` | Exploit unparameterized SQL injection to bypass login, capture the web flag, and locate egress network capture. |
 | **05** | **Networking** | *The Wiretap Chronicle* | **Mod-Hard** | 200 | Download: `incident_traffic.pcap` | Reassemble unencrypted HTTP POST stream in Wireshark, extract flag, and locate confirmation that Marcus wiped his workstation disk. |
-| **06** | **Digital Forensics** | *The Deleted Storage Sector* | **Hard** | 250 | Download: `disk_evidence.raw` | Carve unallocated clusters at sector offset `0x8000` to recover `forensic_evidence.bak`, server credentials (`player`), and `countdown.elf`. |
+| **06** | **Digital Forensics** | *The Deleted Storage Sector* | **Hard** | 250 | Download: `disk_evidence.raw` | Analyze FAT32 filesystem or carve unallocated clusters to recover deleted archive `forensic_evidence.bak`, server credentials (`player`), and `countdown.elf`. |
 | **07** | **Reverse Eng.** | *The Sabotage Binary* | **Hard** | 250 | Download: `countdown.elf` / Workbench: `/stage7-binary` | Reverse byte-wise transform loop `((c ^ 0x5A) + (i*3))` against the table to extract the flag and authorization phrase (`AEGIS-HALT-2026-OMEGA`). |
 | **08** | **System Security** | *Core Mainframe Takeover* | **Hard** | 300 | Interactive: `/stage8-terminal` (SSH: 2222) | Escalate user `player` to root via GTFOBins `sudo find`, then execute `/opt/halt_console AEGIS-HALT-2026-OMEGA` to disarm the sabotage sequence. |
 
@@ -149,9 +149,9 @@ $$\text{Total Score} = \max\left(0, \sum \text{Solved Stage Points} - \sum \text
 | **TC-09** | Stage 1 (OSINT) | Correlate profile comment + forum signature | Fragments combine to `CTF{0s1nt_f00tpr1nt_d1sc0v3r3d}` | **PASS** |
 | **TC-10** | Stage 2 (Stego) | Inspect `evidence_badge.png` metadata vs. LSB note | Decoy EXIF ignored; note reveals `CTF{m3t4d4t4_r3v34ls_4ll}` and channel key | **PASS** |
 | **TC-11** | Stage 3 (Crypto) | Decode Base64 and Vigenère decrypt with channel key | Plaintext reveals `CTF{c1ph3r_ch41n_d3c0d3d}` and gateway URL | **PASS** |
-| **TC-12** | Stage 4 (Web) | Inject `' OR '1'='1` into Gateway login form | Admin dashboard bypassed; `CTF{sql1_auth_byp4ss_succ3ss}` returned | **PASS** |
+| **TC-12** | Stage 4 (Web) | Inject reference SQL authentication bypass | Admin dashboard bypassed; `CTF{sql1_auth_byp4ss_succ3ss}` returned | **PASS** |
 | **TC-13** | Stage 5 (Network) | Follow unencrypted HTTP stream in `incident_traffic.pcap` | Reassembles POST session: `CTF{un3ncrypt3d_tr4ff1c_l34k}` and wipe notice | **PASS** |
-| **TC-14** | Stage 6 (Forensics) | Carve sector `0x8000` in `disk_evidence.raw` | Recovers `forensic_evidence.bak`: `CTF{f1l3_c4rv1ng_m4st3r}` and SSH logins | **PASS** |
+| **TC-14** | Stage 6 (Forensics) | Recover deleted archive from `disk_evidence.raw` | Recovers `forensic_evidence.bak`: `CTF{f1l3_c4rv1ng_m4st3r}` and SSH logins | **PASS** |
 | **TC-15** | Stage 7 (Reverse Eng) | Disassemble `countdown.elf`; reverse transform table | Recovers phrase `AEGIS-HALT-2026-OMEGA` and `CTF{r3v3rs3_3ng1n33r_m4st3r}` | **PASS** |
 | **TC-16** | Stage 8 (Capstone) | Escalate via `sudo find`, run `/opt/halt_console <phrase>` | Root shell spawned; console accepts phrase: `CTF{r00t_pr1v_3sc4l4t10n_d0n3}` | **PASS** |
 | **TC-17** | Isolation | Test outbound network connectivity from sandbox containers | Sandbox ping/curl to external IP fails (`internal: true`) | **PASS** |

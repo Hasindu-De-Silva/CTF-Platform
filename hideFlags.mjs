@@ -46,8 +46,8 @@ async function run() {
       flag: "CTF{sql1_auth_byp4ss_succ3ss}",
       artifactUrl: null,
       targetUrl: "/stage3-gateway",
-      description: "The decrypted C2 transmission from Stage 2 revealed that Marcus Vance maintained access via the HexaTech Enterprise Gateway portal. The login portal dynamically concatenates raw user input into SQL queries without sanitization.\n\nLaunch the in-app Gateway portal, exploit the SQL injection vulnerability (' OR '1'='1) to bypass authentication, infiltrate the admin dashboard, and recover Marcus's active egress network session trace.",
-      hint: "Analyze how username input evaluates within SQL boolean logic. Try injecting classic authentication bypass strings such as ' OR '1'='1.",
+      description: "The decrypted C2 transmission revealed that Marcus Vance still maintains credentials into the HexaTech Perimeter Gateway portal at Substation Alpha-9.\n\nInfiltrate the perimeter gateway, analyze the login authentication mechanism, bypass authentication to gain administrator access, recover the flag from the configuration records, and locate the reference to the egress network capture.",
+      hint: "The gateway builds its login check from what you type. Think about how boolean clauses evaluate in SQL.",
       active: true
     },
     {
@@ -61,7 +61,7 @@ async function run() {
       artifactUrl: "/artifacts/incident_traffic.pcap",
       targetUrl: null,
       description: "Inside the compromised gateway from Stage 3, you uncovered an automated network packet capture logging Marcus Vance's egress traffic (`incident_traffic.pcap`) on Port 80.\n\nAnalyze the captured traffic in Wireshark, follow the unencrypted HTTP communication stream, extract the exfiltrated session flag, and discover Marcus's note confirming he wiped his workstation hard drive before departing.",
-      hint: "Open the capture in Wireshark, filter for 'http' or 'tcp.port == 80', and use 'Follow > TCP Stream' to inspect the plaintext HTTP communication.",
+      hint: "Most traffic is noise. Look for an unusual destination.",
       active: true
     },
     {
@@ -74,8 +74,8 @@ async function run() {
       flag: "CTF{f1l3_c4rv1ng_m4st3r}",
       artifactUrl: "/artifacts/disk_evidence.raw",
       targetUrl: null,
-      description: "Responding to the clue discovered in Stage 4's network packet dump, forensic technicians acquired a raw disk image of Marcus Vance's wiped workstation drive (`disk_evidence.raw`).\n\nMarcus deleted his emergency backup records, but raw cluster bytes remain intact in unallocated sectors. Perform file carving or binary inspection at offset 0x8000 to reconstruct `forensic_evidence.bak`, recover the forensic flag, and obtain the temporary SSH login credentials for the core Linux mainframe.",
-      hint: "File deletion removes pointers, but raw data lingers in unallocated space. Use 'strings -a disk_evidence.raw | grep CTF' or inspect cluster boundaries in a hex editor.",
+      description: "Acting on the wipe evidence uncovered in Stage 5, forensic technicians imaged Marcus's workstation hard drive (`disk_evidence.raw`).\n\nMarcus ran a quick wipe sequence before fleeing, leaving raw cluster records intact in unallocated sectors. Perform file carving or forensic analysis to reconstruct `forensic_evidence.bak`.\n\nRecover the forensics flag, discover the temporary mainframe terminal credentials for user 'player', and extract Marcus's compiled sabotage binary (`countdown.elf`).",
+      hint: "Deleting a file removes the pointer, not necessarily the data.",
       active: true
     },
     {
