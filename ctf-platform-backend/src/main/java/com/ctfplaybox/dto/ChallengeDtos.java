@@ -75,7 +75,6 @@ public class ChallengeDtos {
         private String domain;
         private String difficulty;
         private String description;
-        private String hint;
         private List<HintDto> hints;
         private Integer penaltyDeducted;
         private Integer points;
@@ -86,7 +85,7 @@ public class ChallengeDtos {
         public ChallengeResponse() {}
 
         public ChallengeResponse(Long id, Integer stageOrder, String title, String domain, String difficulty,
-                                 String description, String hint, List<HintDto> hints, Integer penaltyDeducted,
+                                 String description, List<HintDto> hints, Integer penaltyDeducted,
                                  Integer points, boolean solved, String artifactUrl, String targetUrl) {
             this.id = id;
             this.stageOrder = stageOrder;
@@ -94,7 +93,6 @@ public class ChallengeDtos {
             this.domain = domain;
             this.difficulty = difficulty;
             this.description = description;
-            this.hint = hint;
             this.hints = hints;
             this.penaltyDeducted = penaltyDeducted;
             this.points = points;
@@ -120,9 +118,6 @@ public class ChallengeDtos {
 
         public String getDescription() { return description; }
         public void setDescription(String description) { this.description = description; }
-
-        public String getHint() { return hint; }
-        public void setHint(String hint) { this.hint = hint; }
 
         public List<HintDto> getHints() { return hints; }
         public void setHints(List<HintDto> hints) { this.hints = hints; }
@@ -197,7 +192,7 @@ public class ChallengeDtos {
         private String hint3;
         @NotNull
         private Integer points;
-        @NotBlank
+        // Required when creating; on update a blank value keeps the existing flag
         private String flag;
         private String artifactUrl;
         private String targetUrl;

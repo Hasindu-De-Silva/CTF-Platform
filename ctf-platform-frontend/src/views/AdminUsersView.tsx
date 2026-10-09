@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { AdminUser } from '../types/api';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../utils/errors';
 import {
   Users,
   Search,
@@ -39,11 +40,7 @@ export const AdminUsersView: React.FC = () => {
       const data = await api.admin.listUsers();
       setUsers(data);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to fetch users list');
-      }
+      setError(getErrorMessage(err, 'Failed to fetch users list'));
     } finally {
       setLoading(false);
     }
@@ -65,11 +62,7 @@ export const AdminUsersView: React.FC = () => {
       await fetchUsers();
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setDeleteError(err.message);
-      } else {
-        setDeleteError('Failed to delete user.');
-      }
+      setDeleteError(getErrorMessage(err, 'Failed to delete user.'));
     } finally {
       setDeleting(false);
     }

@@ -1,9 +1,11 @@
 package com.ctfplaybox.service;
 
 import com.ctfplaybox.dto.AuthDtos.AdminUserResponse;
+import com.ctfplaybox.model.HintUnlock;
 import com.ctfplaybox.model.Role;
 import com.ctfplaybox.model.Submission;
 import com.ctfplaybox.model.User;
+import com.ctfplaybox.repository.HintUnlockRepository;
 import com.ctfplaybox.repository.SubmissionRepository;
 import com.ctfplaybox.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,11 +21,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final SubmissionRepository submissionRepository;
+    private final HintUnlockRepository hintUnlockRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, SubmissionRepository submissionRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, SubmissionRepository submissionRepository,
+                       HintUnlockRepository hintUnlockRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.submissionRepository = submissionRepository;
+        this.hintUnlockRepository = hintUnlockRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -38,6 +43,7 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    @Transactional(readOnly = true)
     public List<AdminUserResponse> listAllUsersForAdmin() {
         List<User> users = userRepository.findAll();
         List<Submission> allSubmissions = submissionRepository.findAllByOrderBySubmittedAtDesc();
@@ -45,21 +51,31 @@ public class UserService {
         Map<Long, List<Submission>> submissionsByUserId = allSubmissions.stream()
                 .collect(Collectors.groupingBy(s -> s.getUser().getId()));
 
+        // userId -> challengeId -> total hint penalty, so the score matches the scoreboard
+        Map<Long, Map<Long, Integer>> penaltiesByUserId = hintUnlockRepository.findAll().stream()
+                .collect(Collectors.groupingBy(
+                        h -> h.getUser().getId(),
+                        Collectors.groupingBy(h -> h.getChallenge().getId(),
+                                Collectors.summingInt(HintUnlock::getPenaltyPoints))));
+
         return users.stream().map(u -> {
             List<Submission> userSubs = submissionsByUserId.getOrDefault(u.getId(), List.of());
             long submissionCount = userSubs.size();
 
-            // Distinct solved challenges
-            Map<Long, Long> correctByChallenge = userSubs.stream()
+            // Distinct solved challenges -> their points
+            Map<Long, Integer> pointsBySolvedChallenge = userSubs.stream()
                     .filter(Submission::isCorrect)
                     .collect(Collectors.toMap(
                             s -> s.getChallenge().getId(),
-                            s -> (long) s.getChallenge().getPoints(),
+                            s -> s.getChallenge().getPoints(),
                             (p1, p2) -> p1
                     ));
+            Map<Long, Integer> userPenalties = penaltiesByUserId.getOrDefault(u.getId(), Map.of());
 
-            long solvedCount = correctByChallenge.size();
-            long totalScore = correctByChallenge.values().stream().mapToLong(Long::longValue).sum();
+            long solvedCount = pointsBySolvedChallenge.size();
+            long totalScore = pointsBySolvedChallenge.entrySet().stream()
+                    .mapToLong(e -> ChallengeService.netPoints(e.getValue(), userPenalties.getOrDefault(e.getKey(), 0)))
+                    .sum();
 
             return new AdminUserResponse(
                     u.getId(),
@@ -69,7 +85,7 @@ public class UserService {
                     solvedCount,
                     submissionCount
             );
-        }).collect(Collectors.toList());
+        }).toList();
     }
 
     @Transactional
@@ -81,6 +97,7 @@ public class UserService {
             throw new IllegalArgumentException("You cannot delete your own logged-in admin account");
         }
 
+        hintUnlockRepository.deleteByUser(user);
         submissionRepository.deleteByUser(user);
         userRepository.delete(user);
     }

@@ -3,6 +3,7 @@ import type { ScoreboardEntry } from '../types/api';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { SkeletonPodiumCard, SkeletonBar } from '../components/common/Skeletons';
+import { getErrorMessage } from '../utils/errors';
 import {
   Trophy,
   Medal,
@@ -37,11 +38,7 @@ export const ScoreboardView: React.FC = () => {
       });
       setEntries(sorted);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to load scoreboard');
-      }
+      setError(getErrorMessage(err, 'Failed to load scoreboard'));
     } finally {
       setLoading(false);
     }

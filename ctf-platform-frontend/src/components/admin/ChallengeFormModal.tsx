@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { AdminChallenge, AdminChallengeRequest } from '../../types/api';
 import { Modal } from '../common/Modal';
+import { getErrorMessage } from '../../utils/errors';
 import { Loader2, Save, Key, AlertCircle } from 'lucide-react';
 
 interface ChallengeFormModalProps {
@@ -21,23 +22,25 @@ const DEFAULT_DOMAINS = [
 
 const DIFFICULTIES = ['Easy', 'Moderate', 'Moderate-Hard', 'Hard'];
 
+const EMPTY_FORM: AdminChallengeRequest = {
+  stageOrder: 1,
+  title: '',
+  domain: DEFAULT_DOMAINS[0],
+  difficulty: 'Easy',
+  description: '',
+  hint: '',
+  points: 100,
+  flag: '',
+  active: true,
+};
+
 export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
   initialData,
 }) => {
-  const [formData, setFormData] = useState<AdminChallengeRequest>({
-    stageOrder: 1,
-    title: '',
-    domain: DEFAULT_DOMAINS[0],
-    difficulty: 'Easy',
-    description: '',
-    hint: '',
-    points: 100,
-    flag: '',
-    active: true,
-  });
+  const [formData, setFormData] = useState<AdminChallengeRequest>(EMPTY_FORM);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,23 +53,16 @@ export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
         domain: initialData.domain,
         difficulty: initialData.difficulty,
         description: initialData.description || '',
-        hint: initialData.hint || '',
+        // The hint box edits tier 1; tiers 2 and 3 are carried through unchanged
+        hint: initialData.hint1 || initialData.hint || '',
+        hint2: initialData.hint2,
+        hint3: initialData.hint3,
         points: initialData.points,
         flag: '', // Plaintext flag is not returned by the backend for security
         active: initialData.active,
       });
     } else {
-      setFormData({
-        stageOrder: 1,
-        title: '',
-        domain: DEFAULT_DOMAINS[0],
-        difficulty: 'Easy',
-        description: '',
-        hint: '',
-        points: 100,
-        flag: '',
-        active: true,
-      });
+      setFormData(EMPTY_FORM);
     }
     setError(null);
   }, [initialData, isOpen]);
@@ -85,18 +81,19 @@ export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      await onSubmit(formData);
+      await onSubmit({ ...formData, hint1: formData.hint });
       onClose();
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to save challenge');
-      }
+      setError(getErrorMessage(err, 'Failed to save challenge'));
     } finally {
       setLoading(false);
     }
   };
+
+  // Keep the challenge's current domain selectable even if it is not one of the defaults
+  const domainOptions = DEFAULT_DOMAINS.includes(formData.domain)
+    ? DEFAULT_DOMAINS
+    : [formData.domain, ...DEFAULT_DOMAINS];
 
   return (
     <Modal
@@ -116,7 +113,7 @@ export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Stage Order (1 - 6)
+              Stage Order (1 - 8)
             </label>
             <input
               type="number"
@@ -173,7 +170,7 @@ export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
               onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
               className="w-full px-3 py-2 bg-cyber-950 border border-slate-700 rounded-xl text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
             >
-              {DEFAULT_DOMAINS.map((d) => (
+              {domainOptions.map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>

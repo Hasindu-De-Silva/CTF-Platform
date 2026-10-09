@@ -27,7 +27,6 @@ export interface PlayerChallenge {
   domain: string;
   difficulty: string;
   description: string;
-  hint: string;
   hints?: HintTier[];
   penaltyDeducted?: number;
   points: number;

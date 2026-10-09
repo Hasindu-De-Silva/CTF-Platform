@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { SubmissionLog } from '../types/api';
 import { api } from '../services/api';
+import { getErrorMessage } from '../utils/errors';
 import {
   FileText,
   CheckCircle2,
@@ -28,11 +29,7 @@ export const AdminSubmissionsView: React.FC = () => {
       const data = await api.admin.getSubmissions();
       setSubmissions(data);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to fetch submissions log');
-      }
+      setError(getErrorMessage(err, 'Failed to fetch submissions log'));
     } finally {
       setLoading(false);
     }
@@ -42,11 +39,12 @@ export const AdminSubmissionsView: React.FC = () => {
     fetchSubmissions();
   }, []);
 
+  const query = search.toLowerCase();
   const filtered = submissions.filter((s) => {
     const matchesSearch =
-      (s.user?.username && s.user.username.toLowerCase().includes(search.toLowerCase())) ||
-      (s.challenge?.title && s.challenge.title.toLowerCase().includes(search.toLowerCase())) ||
-      (s.submittedFlag && s.submittedFlag.toLowerCase().includes(search.toLowerCase()));
+      (s.user?.username && s.user.username.toLowerCase().includes(query)) ||
+      (s.challenge?.title && s.challenge.title.toLowerCase().includes(query)) ||
+      (s.submittedFlag && s.submittedFlag.toLowerCase().includes(query));
 
     const matchesStatus =
       statusFilter === 'ALL' ||

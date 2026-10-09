@@ -1,6 +1,7 @@
 import React from 'react';
 import type { PlayerChallenge } from '../../types/api';
-import { Badge, getDifficultyVariant } from '../common/Badge';
+import { Badge } from '../common/Badge';
+import { getDifficultyVariant } from '../../utils/challenge';
 import { CheckCircle2, ChevronRight, Award, HelpCircle, Lock } from 'lucide-react';
 
 interface ChallengeCardProps {
@@ -87,7 +88,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onClick
       {/* Footer */}
       <div className="relative flex items-center justify-between pt-4 border-t border-slate-800/80 text-xs">
         <div className="flex items-center gap-1.5 text-slate-400">
-          {challenge.hint ? (
+          {challenge.hints && challenge.hints.length > 0 ? (
             <span className="flex items-center gap-1 text-[11px] text-amber-400/80">
               <HelpCircle className="w-3 h-3" /> Hints available
             </span>

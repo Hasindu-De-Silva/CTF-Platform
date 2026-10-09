@@ -20,12 +20,21 @@ The database `ctf_playbox` is created automatically on first run
 ```bash
 mvn spring-boot:run
 ```
-On first startup, the console prints:
+On first startup, the log shows (the admin line only appears the first time):
 ```
->>> Seeded default admin - username: admin / password: ChangeMe123!  (change this)
->>> Seeded 6 placeholder challenges - replace descriptions/flags with your own designs.
+INFO ... com.ctfplaybox.config.DataSeeder : Seeded default admin - username: admin / password: ChangeMe123!
+INFO ... com.ctfplaybox.config.DataSeeder : Seeded/Updated 8 interconnected challenges across 8 domains (1500 pts total) for Operation Aegis Breach!
 ```
 The API is now live at `http://localhost:8080`.
+
+### Run the tests
+```bash
+mvn test
+```
+The suite runs against an in-memory H2 database (`src/test/resources/application.properties`),
+so MySQL does not need to be running. It covers the scoring rules (hint penalties, 50% floor)
+and the REST API end to end: auth, flag submission and rate limits, hints, reset, scoreboard,
+admin endpoints, and CORS.
 
 **Change the seeded admin password before anyone else can reach this instance** —
 edit `DataSeeder.java` or add an endpoint to change it later.

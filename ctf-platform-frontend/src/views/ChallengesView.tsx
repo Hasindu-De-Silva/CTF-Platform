@@ -3,11 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import type { PlayerChallenge, SubmitFlagResponse } from '../types/api';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
-import { Badge, getDifficultyVariant } from '../components/common/Badge';
+import { Badge } from '../components/common/Badge';
 import { ChallengeCard } from '../components/player/ChallengeCard';
-import { ChallengeModal } from '../components/player/ChallengeModal';
 import { CompletionModal } from '../components/player/CompletionModal';
 import { SkeletonChallengeCard, SkeletonActiveChallenge } from '../components/common/Skeletons';
+import {
+  areAllSolved,
+  byStageOrder,
+  getDifficultyVariant,
+  getLaunchTarget,
+  getNetPoints,
+  withHintUnlocked,
+} from '../utils/challenge';
+import { getErrorMessage } from '../utils/errors';
 import {
   Trophy,
   CheckCircle2,
@@ -33,6 +41,12 @@ import {
   Unlock,
   RotateCcw,
 } from 'lucide-react';
+
+const TIER_TITLES: Record<number, string> = {
+  1: 'Tier 1: Subtle Orientation Clue (-10% points)',
+  2: 'Tier 2: Methodological / Tooling Guide (-15% points)',
+  3: 'Tier 3: Explicit Solution Blueprint (-25% points)',
+};
 
 export const ChallengesView: React.FC = () => {
   const navigate = useNavigate();
@@ -62,10 +76,6 @@ export const ChallengesView: React.FC = () => {
   const [selectedDomain, setSelectedDomain] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SOLVED' | 'UNSOLVED'>('ALL');
 
-  // Modal State (for quick review or direct modal interaction)
-  const [selectedChallenge, setSelectedChallenge] = useState<PlayerChallenge | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
   // Refs for smooth scrolling
   const activeTaskRef = useRef<HTMLDivElement>(null);
   const allTasksRef = useRef<HTMLDivElement>(null);
@@ -75,8 +85,7 @@ export const ChallengesView: React.FC = () => {
     setError(null);
     try {
       const data = await api.challenges.list();
-      // Sort by stageOrder ascending
-      const sorted = [...data].sort((a, b) => a.stageOrder - b.stageOrder);
+      const sorted = [...data].sort(byStageOrder);
       setChallenges(sorted);
 
       // Default active challenge to first unsolved challenge if available
@@ -87,11 +96,7 @@ export const ChallengesView: React.FC = () => {
         setCurrentIndex(0);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to load challenges from server');
-      }
+      setError(getErrorMessage(err, 'Failed to load challenges from server'));
     } finally {
       setLoading(false);
     }
@@ -118,19 +123,11 @@ export const ChallengesView: React.FC = () => {
     try {
       const res = await api.challenges.unlockHint(activeChallenge.id, tier);
       if (res.success) {
-        const updatedHints = (activeChallenge.hints || []).map((h) =>
-          h.tier === tier ? { ...h, unlocked: true, text: res.hintText } : h
-        );
-        const newPenalty = (activeChallenge.penaltyDeducted || 0) + res.penaltyDeducted;
-        const updated = {
-          ...activeChallenge,
-          hints: updatedHints,
-          penaltyDeducted: newPenalty,
-        };
+        const updated = withHintUnlocked(activeChallenge, tier, res);
         setChallenges(challenges.map((c) => (c.id === activeChallenge.id ? updated : c)));
       }
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to unlock hint', 'error');
+      addToast(getErrorMessage(err, 'Failed to unlock hint'), 'error');
     } finally {
       setUnlockingTier(null);
       setConfirmUnlockTier(null);
@@ -148,7 +145,7 @@ export const ChallengesView: React.FC = () => {
       setConfirmResetId(null);
       addToast(`Stage ${updated.stageOrder} progress reset! Hints re-locked and full points restored.`, 'success');
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to reset challenge', 'error');
+      addToast(getErrorMessage(err, 'Failed to reset challenge'), 'error');
     } finally {
       setResettingId(null);
     }
@@ -191,40 +188,22 @@ export const ChallengesView: React.FC = () => {
         const nextChallenges = challenges.map((c) => (c.id === activeChallenge.id ? updated : c));
         setChallenges(nextChallenges);
 
-        // Check if all challenges are now completed!
-        const nextSolvedCount = nextChallenges.filter((c) => c.solved).length;
-        if (nextSolvedCount === nextChallenges.length && nextChallenges.length > 0) {
+        if (areAllSolved(nextChallenges)) {
           setIsCompletionModalOpen(true);
         }
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setSubmitError(err.message);
-      } else {
-        setSubmitError('Failed to submit flag. Please try again.');
-      }
+      setSubmitError(getErrorMessage(err, 'Failed to submit flag. Please try again.'));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleCardClick = (challenge: PlayerChallenge) => {
-    // Set as active task and scroll up, or open modal
+    // Make it the active task and scroll up to it
     const idx = challenges.findIndex((c) => c.id === challenge.id);
     if (idx !== -1) {
       handleSelectChallenge(idx, true);
-    }
-  };
-
-  const handleSolveSuccess = (updatedChallenge: PlayerChallenge) => {
-    const nextChallenges = challenges.map((c) => (c.id === updatedChallenge.id ? updatedChallenge : c));
-    setChallenges(nextChallenges);
-    setSelectedChallenge(updatedChallenge);
-
-    // Check if all challenges are now completed!
-    const nextSolvedCount = nextChallenges.filter((c) => c.solved).length;
-    if (nextSolvedCount === nextChallenges.length && nextChallenges.length > 0) {
-      setIsCompletionModalOpen(true);
     }
   };
 
@@ -232,11 +211,12 @@ export const ChallengesView: React.FC = () => {
   const domains = ['ALL', ...Array.from(new Set(challenges.map((c) => c.domain)))];
 
   // Filtered challenges for scroll-down section
+  const query = search.toLowerCase();
   const filtered = challenges.filter((c) => {
     const matchesSearch =
-      c.title.toLowerCase().includes(search.toLowerCase()) ||
-      c.domain.toLowerCase().includes(search.toLowerCase()) ||
-      (c.description && c.description.toLowerCase().includes(search.toLowerCase()));
+      c.title.toLowerCase().includes(query) ||
+      c.domain.toLowerCase().includes(query) ||
+      (c.description && c.description.toLowerCase().includes(query));
 
     const matchesDomain = selectedDomain === 'ALL' || c.domain === selectedDomain;
 
@@ -251,7 +231,7 @@ export const ChallengesView: React.FC = () => {
   // Player Stats
   const totalPoints = challenges
     .filter((c) => c.solved)
-    .reduce((sum, c) => sum + Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0)), 0);
+    .reduce((sum, c) => sum + getNetPoints(c), 0);
 
   const maxPoints = challenges.reduce((sum, c) => sum + c.points, 0);
   const solvedCount = challenges.filter((c) => c.solved).length;
@@ -472,7 +452,7 @@ export const ChallengesView: React.FC = () => {
                       </Badge>
                       {activeChallenge.solved ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Solved ({Math.max(Math.floor(activeChallenge.points / 2), activeChallenge.points - (activeChallenge.penaltyDeducted || 0))} pts awarded)
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Solved ({getNetPoints(activeChallenge)} pts awarded)
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
@@ -572,33 +552,13 @@ export const ChallengesView: React.FC = () => {
                       )}
                       {activeChallenge.targetUrl && (
                         <a
-                          href={
-                            activeChallenge.stageOrder === 1
-                              ? '/stage1-osint'
-                              : activeChallenge.stageOrder === 4 || activeChallenge.stageOrder === 3
-                              ? '/stage4-gateway'
-                              : activeChallenge.stageOrder === 7
-                              ? '/stage7-binary'
-                              : activeChallenge.stageOrder === 8 || activeChallenge.stageOrder === 6
-                              ? '/stage8-terminal'
-                              : activeChallenge.targetUrl
-                          }
+                          href={getLaunchTarget(activeChallenge.stageOrder, activeChallenge.targetUrl).href}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-semibold transition-all shadow-sm hover:border-emerald-400 cursor-pointer"
                         >
                           <ExternalLink className="w-4 h-4 text-emerald-400" />
-                          <span>
-                            {activeChallenge.stageOrder === 1
-                              ? 'Launch OSINT Investigation'
-                              : activeChallenge.stageOrder === 4 || activeChallenge.stageOrder === 3
-                              ? 'Launch In-App Gateway Portal'
-                              : activeChallenge.stageOrder === 7
-                              ? 'Launch Binary Workbench'
-                              : activeChallenge.stageOrder === 8 || activeChallenge.stageOrder === 6
-                              ? 'Launch In-App Linux Terminal'
-                              : `Launch Target Box (${activeChallenge.targetUrl})`}
-                          </span>
+                          <span>{getLaunchTarget(activeChallenge.stageOrder, activeChallenge.targetUrl).label}</span>
                         </a>
                       )}
                     </div>
@@ -606,7 +566,7 @@ export const ChallengesView: React.FC = () => {
                 </div>
 
                 {/* Progressive Hints & Proposed Penalties */}
-                {((activeChallenge.hints && activeChallenge.hints.length > 0) || activeChallenge.hint) && (
+                {activeChallenge.hints && activeChallenge.hints.length > 0 && (
                   <div className="rounded-2xl border border-amber-500/20 bg-cyber-950/80 overflow-hidden transition-all p-5 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-500/15">
                       <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs uppercase tracking-wider">
@@ -627,89 +587,77 @@ export const ChallengesView: React.FC = () => {
                     </div>
 
                     <div className="space-y-3 pt-1">
-                      {activeChallenge.hints && activeChallenge.hints.length > 0 ? (
-                        activeChallenge.hints.map((h) => {
-                          const tierTitles: Record<number, string> = {
-                            1: 'Tier 1: Subtle Orientation Clue (-10% points)',
-                            2: 'Tier 2: Methodological / Tooling Guide (-15% points)',
-                            3: 'Tier 3: Explicit Solution Blueprint (-25% points)',
-                          };
-
-                          return (
-                            <div
-                              key={h.tier}
-                              className={`p-4 rounded-xl border transition-all ${
-                                h.unlocked
-                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                                  : 'bg-cyber-900/60 border-slate-800 text-slate-400'
-                              }`}
-                            >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-                                <div className="flex items-center gap-2">
-                                  {h.unlocked ? (
-                                    <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
-                                  ) : (
-                                    <Lock className="w-4 h-4 text-slate-500 shrink-0" />
-                                  )}
-                                  <span className="text-xs font-semibold text-slate-200">
-                                    {tierTitles[h.tier] || `Tier ${h.tier}`}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                                    -{h.penalty} pts
-                                  </span>
-                                  {!h.unlocked && (
-                                    confirmUnlockTier === h.tier ? (
-                                      <div className="flex items-center gap-1.5 animate-in fade-in">
-                                        <button
-                                          type="button"
-                                          disabled={unlockingTier === h.tier}
-                                          onClick={() => handleUnlockHint(h.tier)}
-                                          className="px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow transition-all"
-                                        >
-                                          {unlockingTier === h.tier ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                          ) : (
-                                            `Confirm (-${h.penalty} pts)`
-                                          )}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setConfirmUnlockTier(null)}
-                                          className="px-2 py-1 text-xs text-slate-400 hover:text-slate-200"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => setConfirmUnlockTier(h.tier)}
-                                        className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-all"
-                                      >
-                                        <Unlock className="w-3.5 h-3.5" />
-                                        <span>Unlock Clue</span>
-                                      </button>
-                                    )
-                                  )}
-                                </div>
+                      {activeChallenge.hints.map((h) => {
+                        return (
+                          <div
+                            key={h.tier}
+                            className={`p-4 rounded-xl border transition-all ${
+                              h.unlocked
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                                : 'bg-cyber-900/60 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                              <div className="flex items-center gap-2">
+                                {h.unlocked ? (
+                                  <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+                                )}
+                                <span className="text-xs font-semibold text-slate-200">
+                                  {TIER_TITLES[h.tier] || `Tier ${h.tier}`}
+                                </span>
                               </div>
 
-                              {h.unlocked && h.text && (
-                                <div className="pt-2 text-xs font-mono text-amber-100 bg-cyber-950/70 p-3 rounded-lg border border-amber-500/20 whitespace-pre-wrap leading-relaxed">
-                                  {h.text}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                  -{h.penalty} pts
+                                </span>
+                                {!h.unlocked && (
+                                  confirmUnlockTier === h.tier ? (
+                                    <div className="flex items-center gap-1.5 animate-in fade-in">
+                                      <button
+                                        type="button"
+                                        disabled={unlockingTier === h.tier}
+                                        onClick={() => handleUnlockHint(h.tier)}
+                                        className="px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow transition-all"
+                                      >
+                                        {unlockingTier === h.tier ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          `Confirm (-${h.penalty} pts)`
+                                        )}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmUnlockTier(null)}
+                                        className="px-2 py-1 text-xs text-slate-400 hover:text-slate-200"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmUnlockTier(h.tier)}
+                                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-all"
+                                    >
+                                      <Unlock className="w-3.5 h-3.5" />
+                                      <span>Unlock Clue</span>
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             </div>
-                          );
-                        })
-                      ) : (
-                        <div className="p-3 text-xs text-slate-300 font-mono">
-                          {activeChallenge.hint}
-                        </div>
-                      )}
+
+                            {h.unlocked && h.text && (
+                              <div className="pt-2 text-xs font-mono text-amber-100 bg-cyber-950/70 p-3 rounded-lg border border-amber-500/20 whitespace-pre-wrap leading-relaxed">
+                                {h.text}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -725,7 +673,7 @@ export const ChallengesView: React.FC = () => {
                         <div>
                           <p className="text-sm font-semibold">Stage Completed!</p>
                           <p className="text-xs text-emerald-400/80">
-                            You captured this flag and earned {activeChallenge.points} points.
+                            You captured this flag and earned {getNetPoints(activeChallenge)} points.
                           </p>
                         </div>
                       </div>
@@ -988,14 +936,6 @@ export const ChallengesView: React.FC = () => {
           </div>
         </>
       )}
-
-      {/* Challenge Modal (if triggered directly) */}
-      <ChallengeModal
-        challenge={selectedChallenge}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSolveSuccess={handleSolveSuccess}
-      />
 
       {/* Completion Celebration Modal (all tasks solved) */}
       <CompletionModal
