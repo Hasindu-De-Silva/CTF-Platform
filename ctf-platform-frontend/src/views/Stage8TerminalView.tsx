@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, ArrowLeft, Copy, Check } from 'lucide-react';
+import { Terminal, ArrowLeft, Copy, Check, Server, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Stage8TerminalView: React.FC = () => {
@@ -11,8 +11,8 @@ The programs included with the Ubuntu system are free software.
 ======================================================================
 HEXATECH CORE MAINFRAME [AEGIS-CORE] // SYSTEM CONSOLE
 Connected as: player (Session ID: SSH-9942 // Substation Alpha-9)
-Password verified: AegisAccess#2026
-Type 'help' for available system commands.
+Host: aegis-core • User: player (UID 1000)
+Type 'help' or 'cat NOTE_FROM_SECOPS.txt' for mission advisory.
 ======================================================================
 `
     }
@@ -44,14 +44,12 @@ Type 'help' for available system commands.
       setHistory([]);
       return;
     } else if (lower === 'help') {
-      output = `Available enumeration commands:
-  id                                    - Display user identity and group memberships
+      output = `Available system commands:
+  id                                    - Print real and effective user/group IDs
   whoami                                - Print current effective username
-  ls / ls -la                           - List directory files and permissions
-  cat <file>                            - Read content of a file
-  sudo -l                               - List allowed (and forbidden) commands for invoking user
-  sudo find . -exec /bin/sh \\; -quit    - Exploit misconfigured find binary via GTFOBins
-  /opt/halt_console <phrase>            - Execute emergency disarm console (requires root)
+  ls / ls -la                           - List directory contents and permissions
+  cat <file>                            - Concatenate and display file content
+  sudo -l                               - List allowed commands for invoking user
   clear                                 - Clear terminal screen`;
     } else if (lower === 'id') {
       output = currentIsRoot
@@ -64,14 +62,14 @@ Type 'help' for available system commands.
         ? `total 32
 drwx------ 4 root root 4096 Aug 14 02:40 .
 drwxr-xr-x 1 root root 4096 Aug 14 01:00 ..
--rwxr-xr-x 1 root root 1240 Aug 14 02:35 /opt/halt_console
+-rwxr-xr-x 1 root root 1714 Aug 14 02:35 /opt/halt_console
 -rw------- 1 root root   33 Aug 14 02:40 flag.txt
 -rw-r--r-- 1 root root  220 Jan  6  2022 .bashrc
 -rw-r--r-- 1 root root  807 Jan  6  2022 .profile`
         : `total 24
 drwxr-xr-x 2 player player 4096 Aug 14 02:40 .
 drwxr-xr-x 3 root   root   4096 Aug 14 01:00 ..
--rw-r--r-- 1 player player  280 Aug 14 02:41 NOTE_FROM_SECOPS.txt
+-rw-r--r-- 1 player player  379 Aug 14 02:41 NOTE_FROM_SECOPS.txt
 -rw-r--r-- 1 player player  220 Jan  6  2022 .bashrc
 -rw-r--r-- 1 player player  807 Jan  6  2022 .profile`;
     } else if (lower.startsWith('cat note') || lower === 'cat note_from_secops.txt') {
@@ -84,7 +82,7 @@ Once root is achieved, execute:
     /opt/halt_console <Stage 7 Authorization Phrase>`;
     } else if (lower === 'cat /root/flag.txt' || lower === 'cat flag.txt') {
       if (currentIsRoot) {
-        output = `${flag}\n\n[SUCCESS] Direct root read successful! However, remember to also run /opt/halt_console with the Stage 7 phrase to fully neutralize the sabotage sequence!`;
+        output = `${flag}\n\n[SUCCESS] Root flag read directly! You may also execute /opt/halt_console with the Stage 7 phrase to halt the sabotage sequence!`;
         setShowCelebration(true);
       } else {
         output = 'cat: /root/flag.txt: Permission denied';
@@ -96,21 +94,49 @@ Once root is achieved, execute:
 User player may run the following commands on aegis-core:
     (root) NOPASSWD: /usr/bin/find`;
     } else if (
-      lower.includes('sudo find') ||
-      lower.includes('sudo /usr/bin/find')
+      lower.startsWith('sudo find') ||
+      lower.startsWith('sudo /usr/bin/find')
     ) {
-      if (lower.includes('-exec') || lower.includes('sh') || lower.includes('bash')) {
+      if (lower.includes('-exec') && (lower.includes('sh') || lower.includes('bash'))) {
         setIsRoot(true);
-        output = `Spawning elevated root subshell via GTFOBins /usr/bin/find...
+        output = `Spawning elevated root subshell via /usr/bin/find...
 [+] Privilege Escalation Successful! Effective UID: 0 (root).
-[!] Now run /opt/halt_console with the Stage 7 authorization phrase (AEGIS-HALT-2026-OMEGA) to halt the sabotage sequence.`;
+[!] Administrative access established. Run /opt/halt_console with the Stage 7 authorization phrase to disarm the sabotage protocol.`;
+      } else if (lower.includes('-exec') && lower.includes('/opt/halt_console')) {
+        // Direct execution via sudo find -exec /opt/halt_console ...
+        if (lower.includes('aegis-halt-2026-omega')) {
+          output = `============================================================
+HEXATECH CORE MAINFRAME // EMERGENCY DISARM PROTOCOL
+Console: /opt/halt_console [EUID 0 RESTRICTED]
+============================================================
+
+[+] VERIFYING AUTHORIZATION TOKEN: AEGIS-HALT-2026-OMEGA
+[+] Root authority confirmed (UID 0).
+[+] Reversing power grid sabotage sequence...
+[+] Core grid capacitors neutralized!
+
+============================================================
+>>> OPERATION AEGIS BREACH COMPLETE! <<<
+>>> Final Capstone Flag: ${flag} <<<
+============================================================`;
+          setShowCelebration(true);
+        } else {
+          output = `[-] REJECTED: Invalid or missing authorization phrase!
+[-] Usage: /opt/halt_console <Stage 7 Authorization Phrase>
+[-] Reverse engineer Marcus's 'countdown.elf' binary (Stage 7) to recover the valid phrase.`;
+        }
       } else {
-        output = `usage: sudo find <path> -exec <command> \\;`;
+        output = `find: missing argument to '-exec' or standard find usage. Refer to GTFOBins for find privilege escalation syntax.`;
       }
     } else if (lower.startsWith('/opt/halt_console') || lower.startsWith('python3 /opt/halt_console')) {
       if (!currentIsRoot) {
-        output = `[FATAL ERROR] Permission Denied: /opt/halt_console requires ROOT privileges.
-[!] Audit your assigned user permissions using 'sudo -l' to locate escalation vectors.`;
+        output = `============================================================
+HEXATECH CORE MAINFRAME // EMERGENCY DISARM PROTOCOL
+Console: /opt/halt_console [EUID 0 RESTRICTED]
+============================================================
+
+[FATAL ERROR] Permission Denied: This emergency halt console requires ROOT privileges.
+[!] Audit your user permissions using 'sudo -l' to locate escalation vectors.`;
       } else if (lower.includes('aegis-halt-2026-omega')) {
         output = `============================================================
 HEXATECH CORE MAINFRAME // EMERGENCY DISARM PROTOCOL
@@ -149,21 +175,45 @@ Console: /opt/halt_console [EUID 0 RESTRICTED]
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-4 sm:p-8">
       {/* Navigation Header */}
-      <div className="w-full max-w-4xl mb-4 flex items-center justify-between">
-        <Link
-          to="/challenges"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Return to Arena
-        </Link>
-        <span className="text-xs font-mono text-slate-500">
-          STAGE 08 // CAPSTONE TERMINAL
-        </span>
+      <div className="w-full max-w-5xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <Link
+            to="/challenges"
+            className="inline-flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:text-cyan-300 transition-colors mb-1"
+          >
+            <ArrowLeft className="w-4 h-4" /> Return to Arena
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-semibold uppercase">
+              Stage 08 // Capstone Takeover
+            </span>
+            <span className="text-xs text-slate-500 font-mono">NODE 08</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">
+            HexaTech Core Mainframe Terminal: aegis-core
+          </h1>
+        </div>
+
+        {/* External Access Badges */}
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300">
+            <Server className="w-3.5 h-3.5 text-cyan-400" />
+            <span>SSH: <code>localhost:2222</code> (user: <code>player</code>)</span>
+          </div>
+          <a
+            href="http://localhost:8086"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Standalone Console (8086)
+          </a>
+        </div>
       </div>
 
-      <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[650px]">
+      <div className="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[680px]">
         {/* Terminal Header */}
         <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
@@ -176,17 +226,17 @@ Console: /opt/halt_console [EUID 0 RESTRICTED]
               <Terminal className="w-3.5 h-3.5 text-emerald-400" />
               <span>aegis-core (HexaTech Core Mainframe)</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isRoot ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-slate-800 text-slate-400'}`}>
-                {isRoot ? 'ROOT ACCESS # ' : 'USER: player $'}
+                {isRoot ? 'ROOT ACCESS (UID 0)' : 'USER: player (UID 1000)'}
               </span>
             </div>
           </div>
           <span className="text-[10px] font-mono text-slate-500">
-            SSH / TTYD SIMULATION
+            SESSION: SSH-PLAYER
           </span>
         </div>
 
         {/* Terminal Screen Output */}
-        <div className="flex-1 p-4 overflow-y-auto font-mono text-xs text-emerald-400 space-y-3 bg-black/90">
+        <div className="flex-1 p-5 overflow-y-auto font-mono text-xs text-emerald-400 space-y-3 bg-black/90">
           {history.map((h, i) => (
             <div key={i} className="space-y-1">
               {h.cmd && (
@@ -214,7 +264,7 @@ Console: /opt/halt_console [EUID 0 RESTRICTED]
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isRoot ? "Run /opt/halt_console <phrase>..." : "Run commands (e.g. sudo -l, cat NOTE_FROM_SECOPS.txt)..."}
+            placeholder={isRoot ? "Execute /opt/halt_console with authorization phrase..." : "Type command (e.g. id, sudo -l, cat NOTE_FROM_SECOPS.txt)..."}
             className="flex-1 bg-transparent text-slate-100 font-mono text-xs focus:outline-none placeholder-slate-600"
             autoFocus
           />
@@ -226,37 +276,58 @@ Console: /opt/halt_console [EUID 0 RESTRICTED]
           </button>
         </form>
 
-        {/* Footer Quick Exploit Bar */}
-        <div className="bg-slate-900/80 px-4 py-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
+        {/* Footer Command Shortcuts (Zero Spoilers) */}
+        <div className="bg-slate-900/80 px-4 py-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
           <div className="flex items-center gap-2">
-            <span>Quick Shortcuts:</span>
+            <span>Enumeration Shortcuts:</span>
+            <button
+              type="button"
+              onClick={() => setInput('id')}
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
+            >
+              id
+            </button>
+            <button
+              type="button"
+              onClick={() => setInput('whoami')}
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
+            >
+              whoami
+            </button>
+            <button
+              type="button"
+              onClick={() => setInput('ls -la')}
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
+            >
+              ls -la
+            </button>
+            <button
+              type="button"
+              onClick={() => setInput('cat NOTE_FROM_SECOPS.txt')}
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
+            >
+              cat NOTE
+            </button>
             <button
               type="button"
               onClick={() => setInput('sudo -l')}
-              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 transition-colors"
             >
               sudo -l
             </button>
             <button
               type="button"
-              onClick={() => setInput('sudo find . -exec /bin/sh \\; -quit')}
-              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
+              onClick={() => { setHistory([]); setInput(''); }}
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
             >
-              Escalate to Root
-            </button>
-            <button
-              type="button"
-              onClick={() => setInput('/opt/halt_console AEGIS-HALT-2026-OMEGA')}
-              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 transition-colors"
-            >
-              Run Halt Console
+              clear
             </button>
           </div>
 
           {showCelebration && (
             <button
               onClick={handleCopyFlag}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold animate-pulse"
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied' : 'Copy Final Flag'}</span>

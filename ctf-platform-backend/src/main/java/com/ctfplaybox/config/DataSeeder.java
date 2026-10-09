@@ -116,10 +116,10 @@ public class DataSeeder implements CommandLineRunner {
         upsertChallenge(8, "Core Mainframe Takeover",
                 "Linux / System Security", "Hard",
                 "With the credentials found in Stage 6 (`player` / `AegisAccess#2026`) and the authorization phrase decrypted in Stage 7, you connect to the HexaTech Core Mainframe (`aegis-core`).\n\nThe emergency halt console (`/opt/halt_console`) is restricted to user 'root'. Audit your assigned user privileges with 'sudo -l', identify the misconfigured GTFOBins binary (`find`), escalate privileges to root, and execute the halt console with the Stage 7 authorization phrase to halt the sabotage and capture the final capstone flag!",
-                "Run 'sudo -l' as user player. Check GTFOBins for sudo privilege escalation with 'find', then run /opt/halt_console.",
-                "Start by asking the system what you are allowed to do using 'sudo -l'.",
-                "Inspect your sudo rights; a permitted program (/usr/bin/find) can launch other commands (see GTFOBins).",
-                "Use 'sudo find . -exec /bin/sh \\; -quit' to obtain a root shell, then execute '/opt/halt_console AEGIS-HALT-2026-OMEGA'.",
+                "Start by asking the system what you are allowed to do.",
+                "Start by asking the system what you are allowed to do.",
+                "Inspect your sudo rights; a permitted program may launch others (see GTFOBins).",
+                "Use the program's execute option for a root shell, then run the console with the phrase.",
                 300, "CTF{r00t_pr1v_3sc4l4t10n_d0n3}", null, "/stage8-terminal");
 
         System.out.println(">>> Seeded/Updated 8 interconnected challenges across 8 domains (1500 pts total) for Operation Aegis Breach!");
