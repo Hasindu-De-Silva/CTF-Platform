@@ -146,14 +146,14 @@ $$\text{Total Score} = \max\left(0, \sum \text{Solved Stage Points} - \sum \text
 | **TC-06** | Anti-Cheat | Inspect client JSON responses and browser source | Plaintext flags and hashes never exposed in frontend or API payloads | **PASS** |
 | **TC-07** | Rate Limiting | Submit >10 flags/minute; test repeated failed logins | 11th submission throttled (429); account lockout applied after failures | **PASS** |
 | **TC-08** | Scoreboard | Multiple users solve challenges with differing hint penalties | Scoreboard ranks by net points, then solve timestamp for tie-breaks | **PASS** |
-| **TC-09** | Stage 1 (OSINT) | Correlate profile comment + forum signature | Fragments combine to `CTF{0s1nt_f00tpr1nt_d1sc0v3r3d}` | **PASS** |
-| **TC-10** | Stage 2 (Stego) | Inspect `evidence_badge.png` metadata vs. LSB note | Decoy EXIF ignored; note reveals `CTF{m3t4d4t4_r3v34ls_4ll}` and channel key | **PASS** |
-| **TC-11** | Stage 3 (Crypto) | Decode Base64 and Vigenère decrypt with channel key | Plaintext reveals `CTF{c1ph3r_ch41n_d3c0d3d}` and gateway URL | **PASS** |
-| **TC-12** | Stage 4 (Web) | Inject reference SQL authentication bypass | Admin dashboard bypassed; `CTF{sql1_auth_byp4ss_succ3ss}` returned | **PASS** |
-| **TC-13** | Stage 5 (Network) | Follow unencrypted HTTP stream in `incident_traffic.pcap` | Reassembles POST session: `CTF{un3ncrypt3d_tr4ff1c_l34k}` and wipe notice | **PASS** |
-| **TC-14** | Stage 6 (Forensics) | Recover deleted archive from `disk_evidence.raw` | Recovers `forensic_evidence.bak`: `CTF{f1l3_c4rv1ng_m4st3r}` and SSH logins | **PASS** |
-| **TC-15** | Stage 7 (Reverse Eng) | Disassemble `countdown.elf`; reverse transform table | Recovers phrase `AEGIS-HALT-2026-OMEGA` and `CTF{r3v3rs3_3ng1n33r_m4st3r}` | **PASS** |
-| **TC-16** | Stage 8 (Capstone) | Escalate via `sudo find`, run `/opt/halt_console <phrase>` | Root shell spawned; console accepts phrase: `CTF{r00t_pr1v_3sc4l4t10n_d0n3}` | **PASS** |
+| **TC-09** | Stage 1 (OSINT) | Correlate profile comment + forum signature | Fragments successfully combine to valid Stage 1 flag | **PASS** |
+| **TC-10** | Stage 2 (Stego) | Inspect `evidence_badge.png` metadata vs. LSB note | Decoy EXIF ignored; note reveals Stage 2 flag and channel key | **PASS** |
+| **TC-11** | Stage 3 (Crypto) | Decode Base64 and Vigenère decrypt with channel key | Plaintext reveals Stage 3 flag and gateway URL | **PASS** |
+| **TC-12** | Stage 4 (Web) | Inject reference SQL authentication bypass | Admin dashboard bypassed; Stage 4 flag successfully retrieved | **PASS** |
+| **TC-13** | Stage 5 (Network) | Follow unencrypted HTTP stream in `incident_traffic.pcap` | Reassembles POST session: Stage 5 flag and wipe notice recovered | **PASS** |
+| **TC-14** | Stage 6 (Forensics) | Recover deleted archive from `disk_evidence.raw` | Recovers `forensic_evidence.bak`: Stage 6 flag and SSH logins recovered | **PASS** |
+| **TC-15** | Stage 7 (Reverse Eng) | Disassemble `countdown.elf`; reverse transform table | Recovers emergency authorization phrase and Stage 7 flag | **PASS** |
+| **TC-16** | Stage 8 (Capstone) | Escalate via `sudo find`, run `/opt/halt_console <phrase>` | Root shell spawned; console accepts phrase: Stage 8 capstone flag captured | **PASS** |
 | **TC-17** | Isolation | Test outbound network connectivity from sandbox containers | Sandbox ping/curl to external IP fails (`internal: true`) | **PASS** |
 | **TC-18** | Network Security | Host port scan against Docker host | Only published ports (3000, 8080, 8081, 8086, 2222) reachable | **PASS** |
 | **TC-19** | Resource Caps | Fork bomb and memory stress test inside Stage 8 container | Host CPU/memory unimpacted; container capped at 0.5 CPU / 512 MB | **PASS** |

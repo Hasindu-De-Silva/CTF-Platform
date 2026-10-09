@@ -65,11 +65,11 @@ List challenges:
 curl -b cookies.txt http://localhost:8080/api/challenges
 ```
 
-Submit a flag (this example matches the seeded stage 2 flag):
+Submit a flag (example submission format):
 ```bash
 curl -b cookies.txt -X POST http://localhost:8080/api/challenges/2/submit \
   -H "Content-Type: application/json" \
-  -d '{"flag":"CTF{cl4ss1c_c1ph3r_br0k3n}"}'
+  -d '{"flag":"CTF{example_flag_here}"}'
 ```
 
 View the scoreboard:
