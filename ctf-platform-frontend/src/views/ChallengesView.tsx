@@ -31,6 +31,7 @@ import {
   ExternalLink,
   Lock,
   Unlock,
+  RotateCcw,
 } from 'lucide-react';
 
 export const ChallengesView: React.FC = () => {
@@ -53,6 +54,8 @@ export const ChallengesView: React.FC = () => {
 
   // Completion modal state
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
+  const [resettingId, setResettingId] = useState<number | null>(null);
+  const [confirmResetId, setConfirmResetId] = useState<number | null>(null);
 
   // Filters for the "All Challenges" scroll-down section
   const [search, setSearch] = useState('');
@@ -102,6 +105,7 @@ export const ChallengesView: React.FC = () => {
   useEffect(() => {
     setFlagInput('');
     setConfirmUnlockTier(null);
+    setConfirmResetId(null);
     setFeedback(null);
     setSubmitError(null);
   }, [currentIndex]);
@@ -130,6 +134,23 @@ export const ChallengesView: React.FC = () => {
     } finally {
       setUnlockingTier(null);
       setConfirmUnlockTier(null);
+    }
+  };
+
+  const handleResetChallenge = async (challengeId: number) => {
+    setResettingId(challengeId);
+    try {
+      const updated = await api.challenges.reset(challengeId);
+      setChallenges((prev) => prev.map((c) => (c.id === challengeId ? updated : c)));
+      setFlagInput('');
+      setFeedback(null);
+      setSubmitError(null);
+      setConfirmResetId(null);
+      addToast(`Stage ${updated.stageOrder} progress reset! Hints re-locked and full points restored.`, 'success');
+    } catch (err: unknown) {
+      addToast(err instanceof Error ? err.message : 'Failed to reset challenge', 'error');
+    } finally {
+      setResettingId(null);
     }
   };
 
@@ -230,7 +251,7 @@ export const ChallengesView: React.FC = () => {
   // Player Stats
   const totalPoints = challenges
     .filter((c) => c.solved)
-    .reduce((sum, c) => sum + Math.max(0, c.points - (c.penaltyDeducted || 0)), 0);
+    .reduce((sum, c) => sum + Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0)), 0);
 
   const maxPoints = challenges.reduce((sum, c) => sum + c.points, 0);
   const solvedCount = challenges.filter((c) => c.solved).length;
@@ -451,7 +472,7 @@ export const ChallengesView: React.FC = () => {
                       </Badge>
                       {activeChallenge.solved ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Solved ({Math.max(0, activeChallenge.points - (activeChallenge.penaltyDeducted || 0))} pts awarded)
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Solved ({Math.max(Math.floor(activeChallenge.points / 2), activeChallenge.points - (activeChallenge.penaltyDeducted || 0))} pts awarded)
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
@@ -468,8 +489,8 @@ export const ChallengesView: React.FC = () => {
                     </h2>
                   </div>
 
-                  {/* Navigation Buttons: Previous & Skip */}
-                  <div className="flex items-center gap-2 self-start sm:self-center">
+                  {/* Navigation Buttons: Previous, Reset, & Skip */}
+                  <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
                     <button
                       type="button"
                       disabled={currentIndex === 0}
@@ -479,6 +500,41 @@ export const ChallengesView: React.FC = () => {
                       <ChevronLeft className="w-4 h-4" />
                       <span>Previous</span>
                     </button>
+
+                    {confirmResetId === activeChallenge.id ? (
+                      <div className="flex items-center gap-1.5 animate-in fade-in">
+                        <button
+                          type="button"
+                          disabled={resettingId === activeChallenge.id}
+                          onClick={() => handleResetChallenge(activeChallenge.id)}
+                          className="flex items-center gap-1 px-3 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 transition-all"
+                        >
+                          {resettingId === activeChallenge.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          )}
+                          <span>Confirm</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmResetId(null)}
+                          className="px-2 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmResetId(activeChallenge.id)}
+                        title="Reset this stage (re-locks hints, clears submission, restores full points)"
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-cyber-950 border border-slate-800 text-slate-300 hover:text-rose-300 hover:border-rose-500/40 transition-all shadow-sm"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Reset Stage</span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -674,25 +730,61 @@ export const ChallengesView: React.FC = () => {
                         </div>
                       </div>
 
-                      {allSolved ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsCompletionModalOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-cyber-950 bg-gradient-to-r from-yellow-400 to-amber-400 hover:brightness-110 rounded-xl shadow-lg shadow-yellow-500/20 transition-all self-start sm:self-auto"
-                        >
-                          <PartyPopper className="w-4 h-4 text-cyber-950" />
-                          <span>View CTF Completion</span>
-                        </button>
-                      ) : currentIndex < challenges.length - 1 ? (
-                        <button
-                          type="button"
-                          onClick={handleNextChallenge}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg shadow-emerald-600/20 transition-all self-start sm:self-auto"
-                        >
-                          <span>Proceed to Next Stage</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                        {confirmResetId === activeChallenge.id ? (
+                          <div className="flex items-center gap-1.5 animate-in fade-in">
+                            <button
+                              type="button"
+                              disabled={resettingId === activeChallenge.id}
+                              onClick={() => handleResetChallenge(activeChallenge.id)}
+                              className="flex items-center gap-1 px-3 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 transition-all"
+                            >
+                              {resettingId === activeChallenge.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              )}
+                              <span>Confirm Reset</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmResetId(null)}
+                              className="px-2 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmResetId(activeChallenge.id)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-xl bg-cyber-950 border border-slate-800 text-slate-300 hover:text-rose-300 hover:border-rose-500/40 transition-all"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Reset Stage to Retry</span>
+                          </button>
+                        )}
+
+                        {allSolved ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsCompletionModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-cyber-950 bg-gradient-to-r from-yellow-400 to-amber-400 hover:brightness-110 rounded-xl shadow-lg shadow-yellow-500/20 transition-all"
+                          >
+                            <PartyPopper className="w-4 h-4 text-cyber-950" />
+                            <span>View CTF Completion</span>
+                          </button>
+                        ) : currentIndex < challenges.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={handleNextChallenge}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
+                          >
+                            <span>Proceed to Next Stage</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : (
                     <form onSubmit={handleInlineSubmit} className="space-y-4">

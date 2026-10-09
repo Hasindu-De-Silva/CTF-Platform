@@ -102,7 +102,7 @@ export const DashboardView: React.FC = () => {
   const totalCount = challenges.length;
   const earnedPoints = challenges
     .filter((c) => c.solved)
-    .reduce((s, c) => s + Math.max(0, c.points - (c.penaltyDeducted || 0)), 0);
+    .reduce((s, c) => s + Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0)), 0);
   const maxPoints = challenges.reduce((s, c) => s + c.points, 0);
   const progressPct = totalCount > 0 ? Math.round((solvedCount / totalCount) * 100) : 0;
   const allSolved = totalCount > 0 && solvedCount === totalCount;
@@ -334,7 +334,7 @@ export const DashboardView: React.FC = () => {
                         }`}
                       >
                         {c.solved
-                          ? `${Math.max(0, c.points - (c.penaltyDeducted || 0))} pts earned`
+                          ? `${Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0))} pts earned`
                           : `${c.points} pts`}
                       </span>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-cyan-400 transition-colors" />

@@ -16,8 +16,9 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user", "challenge"})
     List<Submission> findAllByOrderBySubmittedAtDesc();
     void deleteByUser(User user);
-    long countByUser(User user);
     Optional<Submission> findTopByUserAndChallengeOrderBySubmittedAtDesc(User user, Challenge challenge);
     long countByUserAndChallengeAndCorrectFalseAndSubmittedAtAfter(User user, Challenge challenge, LocalDateTime after);
+    void deleteByUserAndChallenge(User user, Challenge challenge);
+    List<Submission> findByUserAndChallenge(User user, Challenge challenge);
 }
 

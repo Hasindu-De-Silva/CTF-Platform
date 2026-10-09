@@ -92,6 +92,11 @@ export const api = {
       request<UnlockHintResponse>(`/challenges/${id}/hints/${tier}`, {
         method: 'POST',
       }),
+
+    reset: (id: number): Promise<PlayerChallenge> =>
+      request<PlayerChallenge>(`/challenges/${id}/reset`, {
+        method: 'POST',
+      }),
   },
 
   // Scoreboard

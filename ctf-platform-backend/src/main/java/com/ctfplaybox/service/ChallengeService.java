@@ -40,10 +40,13 @@ public class ChallengeService {
     }
 
     public static int getHintPenalty(int points, int tier) {
+        int t1 = (int) Math.round(points * 0.10);
+        int t2 = (int) Math.round(points * 0.15);
+        int maxPenalty = points / 2; // Total penalty capped at exactly 50% across all 3 tiers
         return switch (tier) {
-            case 1 -> (int) Math.round(points * 0.10);
-            case 2 -> (int) Math.round(points * 0.15);
-            case 3 -> (int) Math.round(points * 0.25);
+            case 1 -> t1;
+            case 2 -> t2;
+            case 3 -> Math.max(0, maxPenalty - (t1 + t2));
             default -> 0;
         };
     }
@@ -166,13 +169,25 @@ public class ChallengeService {
             int penalties = hintUnlockRepository.findByUserAndChallenge(user, challenge).stream()
                     .mapToInt(HintUnlock::getPenaltyPoints)
                     .sum();
-            int netPoints = Math.max(0, challenge.getPoints() - penalties);
+            int minScore = challenge.getPoints() / 2;
+            int netPoints = Math.max(minScore, challenge.getPoints() - penalties);
             String msg = penalties > 0
                     ? "Correct flag! Awarded " + netPoints + " points (deducted " + penalties + " pts hint penalty)."
                     : "Correct flag! Full points awarded.";
             return new SubmitFlagResponse(true, msg, netPoints);
         }
         return new SubmitFlagResponse(false, "Incorrect flag, try again", 0);
+    }
+
+    @Transactional
+    public ChallengeResponse resetChallengeForUser(Long challengeId, User user) {
+        Challenge challenge = challengeRepository.findById(challengeId)
+                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+
+        hintUnlockRepository.deleteByUserAndChallenge(user, challenge);
+        submissionRepository.deleteByUserAndChallenge(user, challenge);
+
+        return toResponse(challenge, user);
     }
 
     // ---- Admin operations ----
@@ -228,19 +243,30 @@ public class ChallengeService {
         Map<String, List<Submission>> byUser = allCorrect.stream()
                 .collect(Collectors.groupingBy(s -> s.getUser().getUsername()));
 
-        Map<String, Long> penaltiesByUser = hintUnlockRepository.findAll().stream()
-                .collect(Collectors.groupingBy(h -> h.getUser().getUsername(), Collectors.summingLong(HintUnlock::getPenaltyPoints)));
+        Map<String, Map<Long, Integer>> penaltiesByUserAndChallenge = hintUnlockRepository.findAll().stream()
+                .filter(h -> h.getUser() != null && h.getChallenge() != null)
+                .collect(Collectors.groupingBy(
+                        h -> h.getUser().getUsername(),
+                        Collectors.groupingBy(
+                                h -> h.getChallenge().getId(),
+                                Collectors.summingInt(HintUnlock::getPenaltyPoints)
+                        )
+                ));
 
         Set<String> allUsernames = new HashSet<>();
         allUsernames.addAll(byUser.keySet());
-        allUsernames.addAll(penaltiesByUser.keySet());
+        allUsernames.addAll(penaltiesByUserAndChallenge.keySet());
 
         return allUsernames.stream()
                 .map(username -> {
                     List<Submission> userSubs = byUser.getOrDefault(username, Collections.emptyList());
-                    long earned = userSubs.stream().mapToLong(s -> s.getChallenge().getPoints()).sum();
-                    long penalty = penaltiesByUser.getOrDefault(username, 0L);
-                    long net = Math.max(0L, earned - penalty);
+                    Map<Long, Integer> userPenalties = penaltiesByUserAndChallenge.getOrDefault(username, Collections.emptyMap());
+                    long net = userSubs.stream().mapToLong(s -> {
+                        int challengePoints = s.getChallenge().getPoints();
+                        int challengePenalties = userPenalties.getOrDefault(s.getChallenge().getId(), 0);
+                        int minScore = challengePoints / 2;
+                        return Math.max(minScore, challengePoints - challengePenalties);
+                    }).sum();
                     return new ScoreboardEntry(username, net, userSubs.size());
                 })
                 .sorted(Comparator.comparingLong(ScoreboardEntry::getTotalPoints).reversed()

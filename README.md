@@ -119,7 +119,7 @@ $$\text{Total Score} = \max\left(0, \sum \text{Solved Stage Points} - \sum \text
 | **06** | The Deleted Storage Sector | 250 | -25 pts | -38 pts | -62 pts | 125 pts |
 | **07** | The Sabotage Binary | 250 | -25 pts | -38 pts | -62 pts | 125 pts |
 | **08** | Core Mainframe Takeover | 300 | -30 pts | -45 pts | -75 pts | 150 pts |
-| **TOTAL** | **8 Stages Across 8 Domains** | **1,500** | **-150 pts** | **-229 pts** | **-373 pts** | **750 pts** |
+| **TOTAL** | **8 Stages Across 8 Domains** | **1,500** | **-150 pts** | **-229 pts** | **-371 pts** | **750 pts** |
 
 ---
 

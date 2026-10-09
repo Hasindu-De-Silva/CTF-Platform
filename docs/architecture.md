@@ -152,7 +152,7 @@ To satisfy rigorous CTF learning standards, challenges do not give away single f
 | :---: | :--- | :---: | :---: | :---: |
 | **Tier 1** | **Subtle Orientation Clue**: Directs attention to high-level concept or non-obvious file structure without revealing tools. | **-10%** | -10 pts | -25 pts |
 | **Tier 2** | **Technical / Tooling Guide**: Recommends concrete tools (`exiftool`, Wireshark filters, GTFOBins) and syntax templates. | **-15%** | -15 pts | -38 pts |
-| **Tier 3** | **Explicit Solution Blueprint**: Exact command execution parameters or payload structure to guarantee progress if totally stuck. | **-25%** | -25 pts | -63 pts |
+| **Tier 3** | **Explicit Solution Blueprint**: Exact command execution parameters or payload structure to guarantee progress if totally stuck. | **-25%** | -25 pts | -62 pts |
 
 ### Security Properties of Hint Delivery:
 - **Zero Client-Side Leaks**: Locked hints have `text: null` in the REST payload. Inspecting browser DevTools or Network tabs reveals no clue content prior to explicit unlock.

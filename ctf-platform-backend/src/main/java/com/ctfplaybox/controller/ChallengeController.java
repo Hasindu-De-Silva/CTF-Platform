@@ -82,6 +82,14 @@ public class ChallengeController {
         return ResponseEntity.ok(challengeService.unlockHint(id, tier, user));
     }
 
+    @PostMapping("/{id}/reset")
+    public ResponseEntity<ChallengeResponse> resetChallenge(
+            @PathVariable Long id,
+            Authentication authentication) {
+        User user = currentUser(authentication);
+        return ResponseEntity.ok(challengeService.resetChallengeForUser(id, user));
+    }
+
     private User currentUser(Authentication authentication) {
         return userRepository.findByUsername(authentication.getName()).orElseThrow();
     }

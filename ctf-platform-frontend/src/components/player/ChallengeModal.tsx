@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Lock,
   Unlock,
+  RotateCcw,
 } from 'lucide-react';
 
 interface ChallengeModalProps {
@@ -38,6 +39,8 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<SubmitFlagResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   if (!challenge) return null;
 
@@ -47,7 +50,26 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
     setConfirmUnlockTier(null);
     setFeedback(null);
     setErrorMessage(null);
+    setConfirmReset(false);
     onClose();
+  };
+
+  const handleResetChallenge = async () => {
+    if (!challenge) return;
+    setResetting(true);
+    try {
+      const updated = await api.challenges.reset(challenge.id);
+      onSolveSuccess(updated);
+      setFlag('');
+      setFeedback(null);
+      setErrorMessage(null);
+      setConfirmReset(false);
+      addToast(`Stage ${updated.stageOrder} progress reset! Hints re-locked and full points restored.`, 'success');
+    } catch (err: unknown) {
+      addToast(err instanceof Error ? err.message : 'Failed to reset challenge', 'error');
+    } finally {
+      setResetting(false);
+    }
   };
 
   const handleUnlockHint = async (tier: number) => {
@@ -123,9 +145,42 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             </Badge>
           </div>
 
-          <div className="flex items-center gap-1.5 font-mono text-sm font-semibold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20">
-            <Award className="w-4 h-4 text-cyan-400" />
-            <span>{challenge.points} Points</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 font-mono text-sm font-semibold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20">
+              <Award className="w-4 h-4 text-cyan-400" />
+              <span>{challenge.points} Points</span>
+            </div>
+
+            {confirmReset ? (
+              <div className="flex items-center gap-1.5 animate-in fade-in">
+                <button
+                  type="button"
+                  disabled={resetting}
+                  onClick={handleResetChallenge}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm transition-all"
+                >
+                  {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  <span>Confirm Reset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="px-2 py-1 text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                title="Reset this stage (re-locks hints, clears submission, restores full points)"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 transition-all shadow-sm"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400 group-hover:text-white" />
+                <span>Reset Task</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -297,16 +352,48 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
 
         {/* Solved Banner or Flag Submission Input */}
         {challenge.solved ? (
-          <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-emerald-300">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-emerald-300">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Challenge Solved!</p>
+                <p className="text-xs text-emerald-400/80">
+                  Awarded {Math.max(Math.floor(challenge.points / 2), challenge.points - (challenge.penaltyDeducted || 0))} pts
+                  {challenge.penaltyDeducted ? ` (-${challenge.penaltyDeducted} penalty)` : ''}.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold">Challenge Solved!</p>
-              <p className="text-xs text-emerald-400/80">
-                You have captured this flag and earned {challenge.points} points.
-              </p>
-            </div>
+            {confirmReset ? (
+              <div className="flex items-center gap-1.5 animate-in fade-in">
+                <button
+                  type="button"
+                  disabled={resetting}
+                  onClick={handleResetChallenge}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm transition-all"
+                >
+                  {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  <span>Confirm Reset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="px-2 py-1 text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/40 transition-all self-start sm:self-auto"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Stage to Retry</span>
+              </button>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

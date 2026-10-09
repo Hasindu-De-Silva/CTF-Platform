@@ -3,24 +3,33 @@ package com.ctfplaybox.config;
 import com.ctfplaybox.model.Challenge;
 import com.ctfplaybox.model.Role;
 import com.ctfplaybox.model.User;
+import com.ctfplaybox.model.HintUnlock;
 import com.ctfplaybox.repository.ChallengeRepository;
+import com.ctfplaybox.repository.HintUnlockRepository;
 import com.ctfplaybox.repository.UserRepository;
+import com.ctfplaybox.service.ChallengeService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
+@Transactional
 public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final ChallengeRepository challengeRepository;
+    private final HintUnlockRepository hintUnlockRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public DataSeeder(UserRepository userRepository, ChallengeRepository challengeRepository, PasswordEncoder passwordEncoder) {
+    public DataSeeder(UserRepository userRepository, ChallengeRepository challengeRepository,
+                      HintUnlockRepository hintUnlockRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.challengeRepository = challengeRepository;
+        this.hintUnlockRepository = hintUnlockRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -28,6 +37,7 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         seedAdmin();
         seedChallenges();
+        syncHintPenalties();
     }
 
     private void seedAdmin() {
@@ -148,5 +158,23 @@ public class DataSeeder implements CommandLineRunner {
         c.setTargetUrl(targetUrl);
         c.setFlagHash(passwordEncoder.encode(plaintextFlag));
         challengeRepository.save(c);
+    }
+
+    private void syncHintPenalties() {
+        List<HintUnlock> unlocks = hintUnlockRepository.findAll();
+        int updated = 0;
+        for (HintUnlock unlock : unlocks) {
+            if (unlock.getChallenge() != null && unlock.getTier() != null) {
+                int correctPenalty = ChallengeService.getHintPenalty(unlock.getChallenge().getPoints(), unlock.getTier());
+                if (unlock.getPenaltyPoints() == null || unlock.getPenaltyPoints() != correctPenalty) {
+                    unlock.setPenaltyPoints(correctPenalty);
+                    hintUnlockRepository.save(unlock);
+                    updated++;
+                }
+            }
+        }
+        if (updated > 0) {
+            System.out.println(">>> Synchronized " + updated + " hint unlock penalties to enforce 50% cap and 750 min score.");
+        }
     }
 }

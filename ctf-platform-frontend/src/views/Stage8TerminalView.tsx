@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, ArrowLeft, Copy, Check, Server, ExternalLink } from 'lucide-react';
+import { Terminal, ArrowLeft, Copy, Check, Server, ExternalLink, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Stage8TerminalView: React.FC = () => {
@@ -28,6 +28,26 @@ Type 'help' or 'cat NOTE_FROM_SECOPS.txt' for mission advisory.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
+
+  const handleResetTerminal = () => {
+    setIsRoot(false);
+    setShowCelebration(false);
+    setInput('');
+    setHistory([
+      {
+        output: `Linux aegis-core 6.8.0-generic #1 SMP x86_64
+The programs included with the Ubuntu system are free software.
+
+======================================================================
+HEXATECH CORE MAINFRAME [AEGIS-CORE] // SYSTEM CONSOLE
+Connected as: player (Session ID: SSH-9942 // Substation Alpha-9)
+Host: aegis-core • User: player (UID 1000)
+Type 'help' or 'cat NOTE_FROM_SECOPS.txt' for mission advisory.
+======================================================================
+`
+      }
+    ]);
+  };
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -321,6 +341,15 @@ Console: /opt/halt_console [EUID 0 RESTRICTED]
               className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors"
             >
               clear
+            </button>
+            <button
+              type="button"
+              onClick={handleResetTerminal}
+              title="Reset terminal session to initial unprivileged player state"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>reset session</span>
             </button>
           </div>
 
