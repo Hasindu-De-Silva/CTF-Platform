@@ -1,24 +1,27 @@
 package com.ctfplaybox.config;
 
 import com.ctfplaybox.model.Challenge;
+import com.ctfplaybox.model.HintUnlock;
 import com.ctfplaybox.model.Role;
 import com.ctfplaybox.model.User;
-import com.ctfplaybox.model.HintUnlock;
 import com.ctfplaybox.repository.ChallengeRepository;
 import com.ctfplaybox.repository.HintUnlockRepository;
 import com.ctfplaybox.repository.UserRepository;
 import com.ctfplaybox.service.ChallengeService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 @Component
 @Transactional
 public class DataSeeder implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
 
     private final UserRepository userRepository;
     private final ChallengeRepository challengeRepository;
@@ -47,7 +50,7 @@ public class DataSeeder implements CommandLineRunner {
             admin.setPassword(passwordEncoder.encode("ChangeMe123!"));
             admin.setRole(Role.ADMIN);
             userRepository.save(admin);
-            System.out.println(">>> Seeded default admin - username: admin / password: ChangeMe123!");
+            log.info("Seeded default admin - username: admin / password: ChangeMe123!");
         }
     }
 
@@ -132,17 +135,14 @@ public class DataSeeder implements CommandLineRunner {
                 "Use the program's execute option for a root shell, then run the console with the phrase.",
                 300, "CTF{r00t_pr1v_3sc4l4t10n_d0n3}", null, "/stage8-terminal");
 
-        System.out.println(">>> Seeded/Updated 8 interconnected challenges across 8 domains (1500 pts total) for Operation Aegis Breach!");
+        log.info("Seeded/Updated 8 interconnected challenges across 8 domains (1500 pts total) for Operation Aegis Breach!");
     }
 
     private void upsertChallenge(int stageOrder, String title, String domain, String difficulty,
                                  String description, String hint, String hint1, String hint2, String hint3,
                                  int points, String plaintextFlag, String artifactUrl, String targetUrl) {
-        Optional<Challenge> existing = challengeRepository.findAll().stream()
-                .filter(c -> c.getStageOrder() == stageOrder)
-                .findFirst();
-
-        Challenge c = existing.orElseGet(Challenge::new);
+        Challenge c = challengeRepository.findFirstByStageOrderOrderByIdAsc(stageOrder)
+                .orElseGet(Challenge::new);
         c.setStageOrder(stageOrder);
         c.setTitle(title);
         c.setDomain(domain);
@@ -174,7 +174,7 @@ public class DataSeeder implements CommandLineRunner {
             }
         }
         if (updated > 0) {
-            System.out.println(">>> Synchronized " + updated + " hint unlock penalties to enforce 50% cap and 750 min score.");
+            log.info("Synchronized {} hint unlock penalties to enforce 50% cap and 750 min score.", updated);
         }
     }
 }

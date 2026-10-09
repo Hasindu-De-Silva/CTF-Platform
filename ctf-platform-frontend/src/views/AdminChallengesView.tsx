@@ -3,8 +3,10 @@ import type { AdminChallenge, AdminChallengeRequest } from '../types/api';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { ChallengeFormModal } from '../components/admin/ChallengeFormModal';
-import { Badge, getDifficultyVariant } from '../components/common/Badge';
+import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { byStageOrder, getDifficultyVariant } from '../utils/challenge';
+import { getErrorMessage } from '../utils/errors';
 import {
   Plus,
   Edit2,
@@ -35,14 +37,10 @@ export const AdminChallengesView: React.FC = () => {
     setError(null);
     try {
       const data = await api.admin.listChallenges();
-      const sorted = [...data].sort((a, b) => a.stageOrder - b.stageOrder);
+      const sorted = [...data].sort(byStageOrder);
       setChallenges(sorted);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to fetch admin challenges');
-      }
+      setError(getErrorMessage(err, 'Failed to fetch admin challenges'));
     } finally {
       setLoading(false);
     }
@@ -66,19 +64,15 @@ export const AdminChallengesView: React.FC = () => {
     try {
       if (editingChallenge) {
         const updated = await api.admin.updateChallenge(editingChallenge.id, data);
-        setChallenges((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c)).sort((a, b) => a.stageOrder - b.stageOrder)
-        );
+        setChallenges((prev) => prev.map((c) => (c.id === updated.id ? updated : c)).sort(byStageOrder));
         addToast(`Challenge "${updated.title}" updated`, 'success');
       } else {
         const created = await api.admin.createChallenge(data);
-        setChallenges((prev) =>
-          [...prev, created].sort((a, b) => a.stageOrder - b.stageOrder)
-        );
+        setChallenges((prev) => [...prev, created].sort(byStageOrder));
         addToast(`Challenge "${created.title}" created`, 'success');
       }
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to save challenge', 'error');
+      addToast(getErrorMessage(err, 'Failed to save challenge'), 'error');
       throw err;
     }
   };
@@ -92,7 +86,7 @@ export const AdminChallengesView: React.FC = () => {
       addToast(`Challenge deleted successfully`, 'success');
       setDeletingChallenge(null);
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to delete challenge', 'error');
+      addToast(getErrorMessage(err, 'Failed to delete challenge'), 'error');
     } finally {
       setDeleteLoading(false);
     }

@@ -3,11 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import type { PlayerChallenge, SubmitFlagResponse } from '../types/api';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
-import { Badge, getDifficultyVariant } from '../components/common/Badge';
+import { Badge } from '../components/common/Badge';
 import { ChallengeCard } from '../components/player/ChallengeCard';
 import { ChallengeModal } from '../components/player/ChallengeModal';
 import { CompletionModal } from '../components/player/CompletionModal';
 import { SkeletonChallengeCard, SkeletonActiveChallenge } from '../components/common/Skeletons';
+import {
+  areAllSolved,
+  byStageOrder,
+  getDifficultyVariant,
+  getLaunchTarget,
+  getNetPoints,
+  withHintUnlocked,
+} from '../utils/challenge';
+import { getErrorMessage } from '../utils/errors';
 import {
   Trophy,
   CheckCircle2,
@@ -33,6 +42,12 @@ import {
   Unlock,
   RotateCcw,
 } from 'lucide-react';
+
+const TIER_TITLES: Record<number, string> = {
+  1: 'Tier 1: Subtle Orientation Clue (-10% points)',
+  2: 'Tier 2: Methodological / Tooling Guide (-15% points)',
+  3: 'Tier 3: Explicit Solution Blueprint (-25% points)',
+};
 
 export const ChallengesView: React.FC = () => {
   const navigate = useNavigate();
@@ -75,8 +90,7 @@ export const ChallengesView: React.FC = () => {
     setError(null);
     try {
       const data = await api.challenges.list();
-      // Sort by stageOrder ascending
-      const sorted = [...data].sort((a, b) => a.stageOrder - b.stageOrder);
+      const sorted = [...data].sort(byStageOrder);
       setChallenges(sorted);
 
       // Default active challenge to first unsolved challenge if available
@@ -87,11 +101,7 @@ export const ChallengesView: React.FC = () => {
         setCurrentIndex(0);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to load challenges from server');
-      }
+      setError(getErrorMessage(err, 'Failed to load challenges from server'));
     } finally {
       setLoading(false);
     }
@@ -118,19 +128,11 @@ export const ChallengesView: React.FC = () => {
     try {
       const res = await api.challenges.unlockHint(activeChallenge.id, tier);
       if (res.success) {
-        const updatedHints = (activeChallenge.hints || []).map((h) =>
-          h.tier === tier ? { ...h, unlocked: true, text: res.hintText } : h
-        );
-        const newPenalty = (activeChallenge.penaltyDeducted || 0) + res.penaltyDeducted;
-        const updated = {
-          ...activeChallenge,
-          hints: updatedHints,
-          penaltyDeducted: newPenalty,
-        };
+        const updated = withHintUnlocked(activeChallenge, tier, res);
         setChallenges(challenges.map((c) => (c.id === activeChallenge.id ? updated : c)));
       }
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to unlock hint', 'error');
+      addToast(getErrorMessage(err, 'Failed to unlock hint'), 'error');
     } finally {
       setUnlockingTier(null);
       setConfirmUnlockTier(null);
@@ -148,7 +150,7 @@ export const ChallengesView: React.FC = () => {
       setConfirmResetId(null);
       addToast(`Stage ${updated.stageOrder} progress reset! Hints re-locked and full points restored.`, 'success');
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to reset challenge', 'error');
+      addToast(getErrorMessage(err, 'Failed to reset challenge'), 'error');
     } finally {
       setResettingId(null);
     }
@@ -191,18 +193,12 @@ export const ChallengesView: React.FC = () => {
         const nextChallenges = challenges.map((c) => (c.id === activeChallenge.id ? updated : c));
         setChallenges(nextChallenges);
 
-        // Check if all challenges are now completed!
-        const nextSolvedCount = nextChallenges.filter((c) => c.solved).length;
-        if (nextSolvedCount === nextChallenges.length && nextChallenges.length > 0) {
+        if (areAllSolved(nextChallenges)) {
           setIsCompletionModalOpen(true);
         }
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setSubmitError(err.message);
-      } else {
-        setSubmitError('Failed to submit flag. Please try again.');
-      }
+      setSubmitError(getErrorMessage(err, 'Failed to submit flag. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -221,9 +217,7 @@ export const ChallengesView: React.FC = () => {
     setChallenges(nextChallenges);
     setSelectedChallenge(updatedChallenge);
 
-    // Check if all challenges are now completed!
-    const nextSolvedCount = nextChallenges.filter((c) => c.solved).length;
-    if (nextSolvedCount === nextChallenges.length && nextChallenges.length > 0) {
+    if (areAllSolved(nextChallenges)) {
       setIsCompletionModalOpen(true);
     }
   };
@@ -232,11 +226,12 @@ export const ChallengesView: React.FC = () => {
   const domains = ['ALL', ...Array.from(new Set(challenges.map((c) => c.domain)))];
 
   // Filtered challenges for scroll-down section
+  const query = search.toLowerCase();
   const filtered = challenges.filter((c) => {
     const matchesSearch =
-      c.title.toLowerCase().includes(search.toLowerCase()) ||
-      c.domain.toLowerCase().includes(search.toLowerCase()) ||
-      (c.description && c.description.toLowerCase().includes(search.toLowerCase()));
+      c.title.toLowerCase().includes(query) ||
+      c.domain.toLowerCase().includes(query) ||
+      (c.description && c.description.toLowerCase().includes(query));
 
     const matchesDomain = selectedDomain === 'ALL' || c.domain === selectedDomain;
 
@@ -251,7 +246,7 @@ export const ChallengesView: React.FC = () => {
   // Player Stats
   const totalPoints = challenges
     .filter((c) => c.solved)
-    .reduce((sum, c) => sum + Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0)), 0);
+    .reduce((sum, c) => sum + getNetPoints(c), 0);
 
   const maxPoints = challenges.reduce((sum, c) => sum + c.points, 0);
   const solvedCount = challenges.filter((c) => c.solved).length;
@@ -472,7 +467,7 @@ export const ChallengesView: React.FC = () => {
                       </Badge>
                       {activeChallenge.solved ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Solved ({Math.max(Math.floor(activeChallenge.points / 2), activeChallenge.points - (activeChallenge.penaltyDeducted || 0))} pts awarded)
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Solved ({getNetPoints(activeChallenge)} pts awarded)
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
@@ -572,33 +567,13 @@ export const ChallengesView: React.FC = () => {
                       )}
                       {activeChallenge.targetUrl && (
                         <a
-                          href={
-                            activeChallenge.stageOrder === 1
-                              ? '/stage1-osint'
-                              : activeChallenge.stageOrder === 4 || activeChallenge.stageOrder === 3
-                              ? '/stage4-gateway'
-                              : activeChallenge.stageOrder === 7
-                              ? '/stage7-binary'
-                              : activeChallenge.stageOrder === 8 || activeChallenge.stageOrder === 6
-                              ? '/stage8-terminal'
-                              : activeChallenge.targetUrl
-                          }
+                          href={getLaunchTarget(activeChallenge.stageOrder, activeChallenge.targetUrl).href}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-semibold transition-all shadow-sm hover:border-emerald-400 cursor-pointer"
                         >
                           <ExternalLink className="w-4 h-4 text-emerald-400" />
-                          <span>
-                            {activeChallenge.stageOrder === 1
-                              ? 'Launch OSINT Investigation'
-                              : activeChallenge.stageOrder === 4 || activeChallenge.stageOrder === 3
-                              ? 'Launch In-App Gateway Portal'
-                              : activeChallenge.stageOrder === 7
-                              ? 'Launch Binary Workbench'
-                              : activeChallenge.stageOrder === 8 || activeChallenge.stageOrder === 6
-                              ? 'Launch In-App Linux Terminal'
-                              : `Launch Target Box (${activeChallenge.targetUrl})`}
-                          </span>
+                          <span>{getLaunchTarget(activeChallenge.stageOrder, activeChallenge.targetUrl).label}</span>
                         </a>
                       )}
                     </div>
@@ -629,12 +604,6 @@ export const ChallengesView: React.FC = () => {
                     <div className="space-y-3 pt-1">
                       {activeChallenge.hints && activeChallenge.hints.length > 0 ? (
                         activeChallenge.hints.map((h) => {
-                          const tierTitles: Record<number, string> = {
-                            1: 'Tier 1: Subtle Orientation Clue (-10% points)',
-                            2: 'Tier 2: Methodological / Tooling Guide (-15% points)',
-                            3: 'Tier 3: Explicit Solution Blueprint (-25% points)',
-                          };
-
                           return (
                             <div
                               key={h.tier}
@@ -652,7 +621,7 @@ export const ChallengesView: React.FC = () => {
                                     <Lock className="w-4 h-4 text-slate-500 shrink-0" />
                                   )}
                                   <span className="text-xs font-semibold text-slate-200">
-                                    {tierTitles[h.tier] || `Tier ${h.tier}`}
+                                    {TIER_TITLES[h.tier] || `Tier ${h.tier}`}
                                   </span>
                                 </div>
 

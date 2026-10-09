@@ -69,7 +69,7 @@ public class UserService {
                     solvedCount,
                     submissionCount
             );
-        }).collect(Collectors.toList());
+        }).toList();
     }
 
     @Transactional

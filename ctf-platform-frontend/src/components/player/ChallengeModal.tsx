@@ -3,7 +3,9 @@ import type { PlayerChallenge, SubmitFlagResponse } from '../../types/api';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Modal } from '../common/Modal';
-import { Badge, getDifficultyVariant } from '../common/Badge';
+import { Badge } from '../common/Badge';
+import { getDifficultyVariant, getLaunchTarget, getNetPoints, withHintUnlocked } from '../../utils/challenge';
+import { getErrorMessage } from '../../utils/errors';
 import {
   Flag,
   Lightbulb,
@@ -18,6 +20,12 @@ import {
   Unlock,
   RotateCcw,
 } from 'lucide-react';
+
+const TIER_TITLES: Record<number, string> = {
+  1: 'Tier 1: Subtle Orientation Clue (-10% pts)',
+  2: 'Tier 2: Methodological Guide (-15% pts)',
+  3: 'Tier 3: Explicit Solution Blueprint (-25% pts)',
+};
 
 interface ChallengeModalProps {
   challenge: PlayerChallenge | null;
@@ -66,7 +74,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
       setConfirmReset(false);
       addToast(`Stage ${updated.stageOrder} progress reset! Hints re-locked and full points restored.`, 'success');
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to reset challenge', 'error');
+      addToast(getErrorMessage(err, 'Failed to reset challenge'), 'error');
     } finally {
       setResetting(false);
     }
@@ -78,20 +86,11 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
     try {
       const res = await api.challenges.unlockHint(challenge.id, tier);
       if (res.success) {
-        const updatedHints = (challenge.hints || []).map((h) =>
-          h.tier === tier ? { ...h, unlocked: true, text: res.hintText } : h
-        );
-        const newPenalty = (challenge.penaltyDeducted || 0) + res.penaltyDeducted;
-        const updated = {
-          ...challenge,
-          hints: updatedHints,
-          penaltyDeducted: newPenalty,
-        };
-        onSolveSuccess(updated);
+        onSolveSuccess(withHintUnlocked(challenge, tier, res));
         addToast(`Hint Tier ${tier} unlocked (-${res.penaltyDeducted} pts penalty)`, 'info');
       }
     } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to unlock hint', 'error');
+      addToast(getErrorMessage(err, 'Failed to unlock hint'), 'error');
     } finally {
       setUnlockingTier(null);
       setConfirmUnlockTier(null);
@@ -116,11 +115,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
         });
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage('Failed to submit flag. Please try again.');
-      }
+      setErrorMessage(getErrorMessage(err, 'Failed to submit flag. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -209,33 +204,13 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             )}
             {challenge.targetUrl && (
               <a
-                href={
-                  challenge.stageOrder === 1
-                    ? '/stage1-osint'
-                    : challenge.stageOrder === 4 || challenge.stageOrder === 3
-                    ? '/stage4-gateway'
-                    : challenge.stageOrder === 7
-                    ? '/stage7-binary'
-                    : challenge.stageOrder === 8 || challenge.stageOrder === 6
-                    ? '/stage8-terminal'
-                    : challenge.targetUrl
-                }
+                href={getLaunchTarget(challenge.stageOrder, challenge.targetUrl).href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-semibold transition-all shadow-sm hover:border-emerald-400 cursor-pointer"
               >
                 <ExternalLink className="w-4 h-4 text-emerald-400" />
-                <span>
-                  {challenge.stageOrder === 1
-                    ? 'Launch OSINT Investigation'
-                    : challenge.stageOrder === 4 || challenge.stageOrder === 3
-                    ? 'Launch In-App Gateway Portal'
-                    : challenge.stageOrder === 7
-                    ? 'Launch Binary Workbench'
-                    : challenge.stageOrder === 8 || challenge.stageOrder === 6
-                    ? 'Launch In-App Linux Terminal'
-                    : `Launch Target Box (${challenge.targetUrl})`}
-                </span>
+                <span>{getLaunchTarget(challenge.stageOrder, challenge.targetUrl).label}</span>
               </a>
             )}
           </div>
@@ -265,12 +240,6 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             <div className="space-y-2.5 pt-1">
               {challenge.hints && challenge.hints.length > 0 ? (
                 challenge.hints.map((h) => {
-                  const tierTitles: Record<number, string> = {
-                    1: 'Tier 1: Subtle Orientation Clue (-10% pts)',
-                    2: 'Tier 2: Methodological Guide (-15% pts)',
-                    3: 'Tier 3: Explicit Solution Blueprint (-25% pts)',
-                  };
-
                   return (
                     <div
                       key={h.tier}
@@ -288,7 +257,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                             <Lock className="w-4 h-4 text-slate-500 shrink-0" />
                           )}
                           <span className="text-xs font-semibold text-slate-200">
-                            {tierTitles[h.tier] || `Tier ${h.tier}`}
+                            {TIER_TITLES[h.tier] || `Tier ${h.tier}`}
                           </span>
                         </div>
 
@@ -360,7 +329,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
               <div>
                 <p className="text-sm font-semibold">Challenge Solved!</p>
                 <p className="text-xs text-emerald-400/80">
-                  Awarded {Math.max(Math.floor(challenge.points / 2), challenge.points - (challenge.penaltyDeducted || 0))} pts
+                  Awarded {getNetPoints(challenge)} pts
                   {challenge.penaltyDeducted ? ` (-${challenge.penaltyDeducted} penalty)` : ''}.
                 </p>
               </div>

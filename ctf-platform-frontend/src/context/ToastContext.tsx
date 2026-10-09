@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, Info, XCircle, X } from 'lucide-react';
 
 /* ────────────── types ────────────── */
@@ -57,14 +57,14 @@ const ToastItem: React.FC<{
   toast: Toast;
   onDismiss: (id: string) => void;
 }> = ({ toast, onDismiss }) => {
-  const [exiting, setExiting] = React.useState(false);
+  const [exiting, setExiting] = useState(false);
 
   const dismiss = useCallback(() => {
     setExiting(true);
     setTimeout(() => onDismiss(toast.id), 200);
   }, [onDismiss, toast.id]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setTimeout(dismiss, toast.durationMs);
     return () => clearTimeout(timer);
   }, [dismiss, toast.durationMs]);
@@ -119,8 +119,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [],
   );
 
+  const value = useMemo(() => ({ addToast, removeToast }), [addToast, removeToast]);
+
   return (
-    <ToastContext.Provider value={{ addToast, removeToast }}>
+    <ToastContext.Provider value={value}>
       {children}
 
       {/* Toast container — fixed bottom-right */}

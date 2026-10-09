@@ -24,6 +24,15 @@ import java.util.stream.Collectors;
 @Service
 public class ChallengeService {
 
+    private static final int MIN_HINT_TIER = 1;
+    private static final int MAX_HINT_TIER = 3;
+
+    // Anti-spam: minimum gap between two attempts on the same challenge
+    private static final int SUBMISSION_COOLDOWN_SECONDS = 2;
+    // Anti-brute-force: failed attempts allowed per challenge inside the window below
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int FAILED_ATTEMPTS_WINDOW_SECONDS = 60;
+
     private final ChallengeRepository challengeRepository;
     private final SubmissionRepository submissionRepository;
     private final HintUnlockRepository hintUnlockRepository;
@@ -51,16 +60,25 @@ public class ChallengeService {
         };
     }
 
+    /** Points for a solve: hint penalties are deducted, but a solve is never worth less than half its points. */
+    static int netPoints(int points, int penalties) {
+        int minScore = points / 2;
+        return Math.max(minScore, points - penalties);
+    }
+
+    public Challenge findChallenge(Long id) {
+        return challengeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+    }
+
     public List<ChallengeResponse> listForPlayer(User user) {
         return challengeRepository.findByActiveTrueOrderByStageOrderAsc().stream()
                 .map(c -> toResponse(c, user))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public ChallengeResponse getOneForPlayer(Long id, User user) {
-        Challenge c = challengeRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
-        return toResponse(c, user);
+        return toResponse(findChallenge(id), user);
     }
 
     private ChallengeResponse toResponse(Challenge c, User user) {
@@ -73,7 +91,7 @@ public class ChallengeService {
                 .collect(Collectors.toMap(HintUnlock::getTier, h -> h, (a, b) -> a));
 
         List<HintDto> hints = new ArrayList<>();
-        for (int tier = 1; tier <= 3; tier++) {
+        for (int tier = MIN_HINT_TIER; tier <= MAX_HINT_TIER; tier++) {
             String hintText = getHintText(c, tier);
             if (hintText != null && !hintText.isBlank()) {
                 boolean isUnlocked = unlockMap.containsKey(tier);
@@ -102,12 +120,12 @@ public class ChallengeService {
 
     @Transactional
     public UnlockHintResponse unlockHint(Long challengeId, int tier, User user) {
-        if (tier < 1 || tier > 3) {
-            return new UnlockHintResponse(false, tier, 0, null, "Invalid hint tier. Must be between 1 and 3.");
+        if (tier < MIN_HINT_TIER || tier > MAX_HINT_TIER) {
+            return new UnlockHintResponse(false, tier, 0, null,
+                    "Invalid hint tier. Must be between " + MIN_HINT_TIER + " and " + MAX_HINT_TIER + ".");
         }
 
-        Challenge challenge = challengeRepository.findById(challengeId)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+        Challenge challenge = findChallenge(challengeId);
 
         String text = getHintText(challenge, tier);
         if (text == null || text.isBlank()) {
@@ -134,26 +152,26 @@ public class ChallengeService {
 
     @Transactional
     public SubmitFlagResponse submitFlag(Long challengeId, User user, String submittedFlag) {
-        Challenge challenge = challengeRepository.findById(challengeId)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+        Challenge challenge = findChallenge(challengeId);
 
         boolean alreadySolved = submissionRepository.existsByUserAndChallengeAndCorrectTrue(user, challenge);
         if (alreadySolved) {
             return new SubmitFlagResponse(true, "Already solved - points already awarded", 0);
         }
 
-        // Anti-spam rate limiting: 2-second cooldown between attempts
         Optional<Submission> lastSub = submissionRepository.findTopByUserAndChallengeOrderBySubmittedAtDesc(user, challenge);
-        if (lastSub.isPresent() && lastSub.get().getSubmittedAt().isAfter(LocalDateTime.now().minusSeconds(2))) {
-            return new SubmitFlagResponse(false, "Rate limit: Please wait 2 seconds between attempts.", 0);
+        if (lastSub.isPresent()
+                && lastSub.get().getSubmittedAt().isAfter(LocalDateTime.now().minusSeconds(SUBMISSION_COOLDOWN_SECONDS))) {
+            return new SubmitFlagResponse(false,
+                    "Rate limit: Please wait " + SUBMISSION_COOLDOWN_SECONDS + " seconds between attempts.", 0);
         }
 
-        // Anti-brute-force rate limiting: maximum 5 failed attempts per minute per challenge
         long recentFailures = submissionRepository.countByUserAndChallengeAndCorrectFalseAndSubmittedAtAfter(
-                user, challenge, LocalDateTime.now().minusSeconds(60)
+                user, challenge, LocalDateTime.now().minusSeconds(FAILED_ATTEMPTS_WINDOW_SECONDS)
         );
-        if (recentFailures >= 5) {
-            return new SubmitFlagResponse(false, "Too many failed attempts! Cooldown active for 60 seconds.", 0);
+        if (recentFailures >= MAX_FAILED_ATTEMPTS) {
+            return new SubmitFlagResponse(false,
+                    "Too many failed attempts! Cooldown active for " + FAILED_ATTEMPTS_WINDOW_SECONDS + " seconds.", 0);
         }
 
         boolean correct = passwordEncoder.matches(submittedFlag, challenge.getFlagHash());
@@ -169,20 +187,18 @@ public class ChallengeService {
             int penalties = hintUnlockRepository.findByUserAndChallenge(user, challenge).stream()
                     .mapToInt(HintUnlock::getPenaltyPoints)
                     .sum();
-            int minScore = challenge.getPoints() / 2;
-            int netPoints = Math.max(minScore, challenge.getPoints() - penalties);
+            int awarded = netPoints(challenge.getPoints(), penalties);
             String msg = penalties > 0
-                    ? "Correct flag! Awarded " + netPoints + " points (deducted " + penalties + " pts hint penalty)."
+                    ? "Correct flag! Awarded " + awarded + " points (deducted " + penalties + " pts hint penalty)."
                     : "Correct flag! Full points awarded.";
-            return new SubmitFlagResponse(true, msg, netPoints);
+            return new SubmitFlagResponse(true, msg, awarded);
         }
         return new SubmitFlagResponse(false, "Incorrect flag, try again", 0);
     }
 
     @Transactional
     public ChallengeResponse resetChallengeForUser(Long challengeId, User user) {
-        Challenge challenge = challengeRepository.findById(challengeId)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+        Challenge challenge = findChallenge(challengeId);
 
         hintUnlockRepository.deleteByUserAndChallenge(user, challenge);
         submissionRepository.deleteByUserAndChallenge(user, challenge);
@@ -203,8 +219,7 @@ public class ChallengeService {
     }
 
     public Challenge updateChallenge(Long id, AdminChallengeRequest req) {
-        Challenge c = challengeRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+        Challenge c = findChallenge(id);
         applyRequest(c, req);
         return challengeRepository.save(c);
     }
@@ -261,16 +276,14 @@ public class ChallengeService {
                 .map(username -> {
                     List<Submission> userSubs = byUser.getOrDefault(username, Collections.emptyList());
                     Map<Long, Integer> userPenalties = penaltiesByUserAndChallenge.getOrDefault(username, Collections.emptyMap());
-                    long net = userSubs.stream().mapToLong(s -> {
-                        int challengePoints = s.getChallenge().getPoints();
-                        int challengePenalties = userPenalties.getOrDefault(s.getChallenge().getId(), 0);
-                        int minScore = challengePoints / 2;
-                        return Math.max(minScore, challengePoints - challengePenalties);
-                    }).sum();
+                    long net = userSubs.stream()
+                            .mapToLong(s -> netPoints(s.getChallenge().getPoints(),
+                                    userPenalties.getOrDefault(s.getChallenge().getId(), 0)))
+                            .sum();
                     return new ScoreboardEntry(username, net, userSubs.size());
                 })
                 .sorted(Comparator.comparingLong(ScoreboardEntry::getTotalPoints).reversed()
                         .thenComparingLong(ScoreboardEntry::getSolvedCount).reversed())
-                .collect(Collectors.toList());
+                .toList();
     }
 }

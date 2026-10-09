@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { AdminChallenge, AdminChallengeRequest } from '../../types/api';
 import { Modal } from '../common/Modal';
+import { getErrorMessage } from '../../utils/errors';
 import { Loader2, Save, Key, AlertCircle } from 'lucide-react';
 
 interface ChallengeFormModalProps {
@@ -21,23 +22,25 @@ const DEFAULT_DOMAINS = [
 
 const DIFFICULTIES = ['Easy', 'Moderate', 'Moderate-Hard', 'Hard'];
 
+const EMPTY_FORM: AdminChallengeRequest = {
+  stageOrder: 1,
+  title: '',
+  domain: DEFAULT_DOMAINS[0],
+  difficulty: 'Easy',
+  description: '',
+  hint: '',
+  points: 100,
+  flag: '',
+  active: true,
+};
+
 export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
   initialData,
 }) => {
-  const [formData, setFormData] = useState<AdminChallengeRequest>({
-    stageOrder: 1,
-    title: '',
-    domain: DEFAULT_DOMAINS[0],
-    difficulty: 'Easy',
-    description: '',
-    hint: '',
-    points: 100,
-    flag: '',
-    active: true,
-  });
+  const [formData, setFormData] = useState<AdminChallengeRequest>(EMPTY_FORM);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,17 +59,7 @@ export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
         active: initialData.active,
       });
     } else {
-      setFormData({
-        stageOrder: 1,
-        title: '',
-        domain: DEFAULT_DOMAINS[0],
-        difficulty: 'Easy',
-        description: '',
-        hint: '',
-        points: 100,
-        flag: '',
-        active: true,
-      });
+      setFormData(EMPTY_FORM);
     }
     setError(null);
   }, [initialData, isOpen]);
@@ -88,11 +81,7 @@ export const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({
       await onSubmit(formData);
       onClose();
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to save challenge');
-      }
+      setError(getErrorMessage(err, 'Failed to save challenge'));
     } finally {
       setLoading(false);
     }

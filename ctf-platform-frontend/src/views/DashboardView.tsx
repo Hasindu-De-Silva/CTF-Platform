@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import type { PlayerChallenge, ScoreboardEntry } from '../types/api';
 import { api } from '../services/api';
 import { SkeletonStatCard } from '../components/common/Skeletons';
+import { byStageOrder, getNetPoints } from '../utils/challenge';
 import {
   Shield,
   Trophy,
@@ -86,7 +87,7 @@ export const DashboardView: React.FC = () => {
           api.challenges.list(),
           api.scoreboard.get(),
         ]);
-        setChallenges([...challs].sort((a, b) => a.stageOrder - b.stageOrder));
+        setChallenges([...challs].sort(byStageOrder));
         setScoreboard([...scores].sort((a, b) => b.totalPoints - a.totalPoints));
       } catch {
         // Non-critical — dashboard gracefully shows empty
@@ -102,7 +103,7 @@ export const DashboardView: React.FC = () => {
   const totalCount = challenges.length;
   const earnedPoints = challenges
     .filter((c) => c.solved)
-    .reduce((s, c) => s + Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0)), 0);
+    .reduce((s, c) => s + getNetPoints(c), 0);
   const maxPoints = challenges.reduce((s, c) => s + c.points, 0);
   const progressPct = totalCount > 0 ? Math.round((solvedCount / totalCount) * 100) : 0;
   const allSolved = totalCount > 0 && solvedCount === totalCount;
@@ -334,7 +335,7 @@ export const DashboardView: React.FC = () => {
                         }`}
                       >
                         {c.solved
-                          ? `${Math.max(Math.floor(c.points / 2), c.points - (c.penaltyDeducted || 0))} pts earned`
+                          ? `${getNetPoints(c)} pts earned`
                           : `${c.points} pts`}
                       </span>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-cyan-400 transition-colors" />

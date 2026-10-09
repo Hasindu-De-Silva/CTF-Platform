@@ -1,6 +1,7 @@
 import React from 'react';
 import type { PlayerChallenge } from '../../types/api';
-import { Badge, getDifficultyVariant } from '../common/Badge';
+import { Badge } from '../common/Badge';
+import { getDifficultyVariant } from '../../utils/challenge';
 import { CheckCircle2, ChevronRight, Award, HelpCircle, Lock } from 'lucide-react';
 
 interface ChallengeCardProps {

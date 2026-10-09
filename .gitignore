@@ -36,6 +36,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Python bytecode cache (generate_challenges.py)
+__pycache__/
+*.py[cod]
+
 # General logs
 logs/
 *.log

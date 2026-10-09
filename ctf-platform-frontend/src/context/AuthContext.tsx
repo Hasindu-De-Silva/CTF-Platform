@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { User } from '../types/api';
 import { api } from '../services/api';
 
@@ -17,7 +17,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const currentUser = await api.auth.me();
       setUser(currentUser);
@@ -26,32 +26,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshUser();
-  }, []);
+  }, [refreshUser]);
 
-  const login = async (credentials: { username: string; password: string }) => {
+  const login = useCallback(async (credentials: { username: string; password: string }) => {
     const loggedInUser = await api.auth.login(credentials);
     setUser(loggedInUser);
     return loggedInUser;
-  };
+  }, []);
 
-  const register = async (credentials: { username: string; password: string }) => {
+  const register = useCallback(async (credentials: { username: string; password: string }) => {
     return await api.auth.register(credentials);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await api.auth.logout();
     } finally {
       setUser(null);
     }
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, login, register, logout, refreshUser }),
+    [user, loading, login, register, logout, refreshUser],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,13 +4,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -36,7 +40,7 @@ public class SecurityConfig {
         http
             // CSRF disabled for a token/session API used by a separate React app during coursework.
             // In a production deployment you would re-enable this with a CSRF cookie strategy.
-            .csrf(csrf -> csrf.disable())
+            .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
@@ -49,18 +53,17 @@ public class SecurityConfig {
             // Defense-in-depth response headers. These do not change any API
             // behaviour; they only harden how browsers treat the responses.
             .headers(headers -> headers
-                .contentTypeOptions(cto -> {})                 // X-Content-Type-Options: nosniff
-                .frameOptions(frame -> frame.sameOrigin())      // X-Frame-Options: SAMEORIGIN (anti-clickjacking)
-                .referrerPolicy(rp -> rp.policy(
-                    org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
-                        .ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                .contentTypeOptions(Customizer.withDefaults())                // X-Content-Type-Options: nosniff
+                .frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin) // X-Frame-Options: SAMEORIGIN (anti-clickjacking)
+                .referrerPolicy(rp -> rp.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
             )
-            .httpBasic(basic -> basic.disable())
-            .formLogin(form -> form.disable());
+            .httpBasic(AbstractHttpConfigurer::disable)
+            .formLogin(AbstractHttpConfigurer::disable);
 
         return http.build();
     }
 
+    // Single source of truth for CORS: Spring Security's CorsFilter applies this to every request.
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
