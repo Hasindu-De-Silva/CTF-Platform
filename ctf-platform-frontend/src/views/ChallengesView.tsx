@@ -5,7 +5,6 @@ import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { Badge } from '../components/common/Badge';
 import { ChallengeCard } from '../components/player/ChallengeCard';
-import { ChallengeModal } from '../components/player/ChallengeModal';
 import { CompletionModal } from '../components/player/CompletionModal';
 import { SkeletonChallengeCard, SkeletonActiveChallenge } from '../components/common/Skeletons';
 import {
@@ -76,10 +75,6 @@ export const ChallengesView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedDomain, setSelectedDomain] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SOLVED' | 'UNSOLVED'>('ALL');
-
-  // Modal State (for quick review or direct modal interaction)
-  const [selectedChallenge, setSelectedChallenge] = useState<PlayerChallenge | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Refs for smooth scrolling
   const activeTaskRef = useRef<HTMLDivElement>(null);
@@ -205,20 +200,10 @@ export const ChallengesView: React.FC = () => {
   };
 
   const handleCardClick = (challenge: PlayerChallenge) => {
-    // Set as active task and scroll up, or open modal
+    // Make it the active task and scroll up to it
     const idx = challenges.findIndex((c) => c.id === challenge.id);
     if (idx !== -1) {
       handleSelectChallenge(idx, true);
-    }
-  };
-
-  const handleSolveSuccess = (updatedChallenge: PlayerChallenge) => {
-    const nextChallenges = challenges.map((c) => (c.id === updatedChallenge.id ? updatedChallenge : c));
-    setChallenges(nextChallenges);
-    setSelectedChallenge(updatedChallenge);
-
-    if (areAllSolved(nextChallenges)) {
-      setIsCompletionModalOpen(true);
     }
   };
 
@@ -581,7 +566,7 @@ export const ChallengesView: React.FC = () => {
                 </div>
 
                 {/* Progressive Hints & Proposed Penalties */}
-                {((activeChallenge.hints && activeChallenge.hints.length > 0) || activeChallenge.hint) && (
+                {activeChallenge.hints && activeChallenge.hints.length > 0 && (
                   <div className="rounded-2xl border border-amber-500/20 bg-cyber-950/80 overflow-hidden transition-all p-5 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-500/15">
                       <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs uppercase tracking-wider">
@@ -602,83 +587,77 @@ export const ChallengesView: React.FC = () => {
                     </div>
 
                     <div className="space-y-3 pt-1">
-                      {activeChallenge.hints && activeChallenge.hints.length > 0 ? (
-                        activeChallenge.hints.map((h) => {
-                          return (
-                            <div
-                              key={h.tier}
-                              className={`p-4 rounded-xl border transition-all ${
-                                h.unlocked
-                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                                  : 'bg-cyber-900/60 border-slate-800 text-slate-400'
-                              }`}
-                            >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-                                <div className="flex items-center gap-2">
-                                  {h.unlocked ? (
-                                    <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
-                                  ) : (
-                                    <Lock className="w-4 h-4 text-slate-500 shrink-0" />
-                                  )}
-                                  <span className="text-xs font-semibold text-slate-200">
-                                    {TIER_TITLES[h.tier] || `Tier ${h.tier}`}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                                    -{h.penalty} pts
-                                  </span>
-                                  {!h.unlocked && (
-                                    confirmUnlockTier === h.tier ? (
-                                      <div className="flex items-center gap-1.5 animate-in fade-in">
-                                        <button
-                                          type="button"
-                                          disabled={unlockingTier === h.tier}
-                                          onClick={() => handleUnlockHint(h.tier)}
-                                          className="px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow transition-all"
-                                        >
-                                          {unlockingTier === h.tier ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                          ) : (
-                                            `Confirm (-${h.penalty} pts)`
-                                          )}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setConfirmUnlockTier(null)}
-                                          className="px-2 py-1 text-xs text-slate-400 hover:text-slate-200"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => setConfirmUnlockTier(h.tier)}
-                                        className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-all"
-                                      >
-                                        <Unlock className="w-3.5 h-3.5" />
-                                        <span>Unlock Clue</span>
-                                      </button>
-                                    )
-                                  )}
-                                </div>
+                      {activeChallenge.hints.map((h) => {
+                        return (
+                          <div
+                            key={h.tier}
+                            className={`p-4 rounded-xl border transition-all ${
+                              h.unlocked
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                                : 'bg-cyber-900/60 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                              <div className="flex items-center gap-2">
+                                {h.unlocked ? (
+                                  <Unlock className="w-4 h-4 text-amber-400 shrink-0" />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+                                )}
+                                <span className="text-xs font-semibold text-slate-200">
+                                  {TIER_TITLES[h.tier] || `Tier ${h.tier}`}
+                                </span>
                               </div>
 
-                              {h.unlocked && h.text && (
-                                <div className="pt-2 text-xs font-mono text-amber-100 bg-cyber-950/70 p-3 rounded-lg border border-amber-500/20 whitespace-pre-wrap leading-relaxed">
-                                  {h.text}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                  -{h.penalty} pts
+                                </span>
+                                {!h.unlocked && (
+                                  confirmUnlockTier === h.tier ? (
+                                    <div className="flex items-center gap-1.5 animate-in fade-in">
+                                      <button
+                                        type="button"
+                                        disabled={unlockingTier === h.tier}
+                                        onClick={() => handleUnlockHint(h.tier)}
+                                        className="px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow transition-all"
+                                      >
+                                        {unlockingTier === h.tier ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          `Confirm (-${h.penalty} pts)`
+                                        )}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmUnlockTier(null)}
+                                        className="px-2 py-1 text-xs text-slate-400 hover:text-slate-200"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmUnlockTier(h.tier)}
+                                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-all"
+                                    >
+                                      <Unlock className="w-3.5 h-3.5" />
+                                      <span>Unlock Clue</span>
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             </div>
-                          );
-                        })
-                      ) : (
-                        <div className="p-3 text-xs text-slate-300 font-mono">
-                          {activeChallenge.hint}
-                        </div>
-                      )}
+
+                            {h.unlocked && h.text && (
+                              <div className="pt-2 text-xs font-mono text-amber-100 bg-cyber-950/70 p-3 rounded-lg border border-amber-500/20 whitespace-pre-wrap leading-relaxed">
+                                {h.text}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -694,7 +673,7 @@ export const ChallengesView: React.FC = () => {
                         <div>
                           <p className="text-sm font-semibold">Stage Completed!</p>
                           <p className="text-xs text-emerald-400/80">
-                            You captured this flag and earned {activeChallenge.points} points.
+                            You captured this flag and earned {getNetPoints(activeChallenge)} points.
                           </p>
                         </div>
                       </div>
@@ -957,14 +936,6 @@ export const ChallengesView: React.FC = () => {
           </div>
         </>
       )}
-
-      {/* Challenge Modal (if triggered directly) */}
-      <ChallengeModal
-        challenge={selectedChallenge}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSolveSuccess={handleSolveSuccess}
-      />
 
       {/* Completion Celebration Modal (all tasks solved) */}
       <CompletionModal

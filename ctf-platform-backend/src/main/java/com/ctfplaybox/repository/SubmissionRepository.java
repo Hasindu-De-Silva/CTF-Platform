@@ -18,4 +18,5 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     Optional<Submission> findTopByUserAndChallengeOrderBySubmittedAtDesc(User user, Challenge challenge);
     long countByUserAndChallengeAndCorrectFalseAndSubmittedAtAfter(User user, Challenge challenge, LocalDateTime after);
     void deleteByUserAndChallenge(User user, Challenge challenge);
+    void deleteByChallenge(Challenge challenge);
 }

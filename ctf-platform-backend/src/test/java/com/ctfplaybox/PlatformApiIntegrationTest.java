@@ -23,11 +23,13 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -143,11 +145,15 @@ class PlatformApiIntegrationTest {
                 .andExpect(jsonPath("$[0].hints[2].penalty").value(25))
                 .andExpect(jsonPath("$[0].hints[0].unlocked").value(false))
                 .andExpect(jsonPath("$[0].hints[0].text").value(nullValue()))
+                .andExpect(jsonPath("$[0].hint").doesNotExist())
                 .andExpect(jsonPath("$[7].stageOrder").value(8))
                 .andExpect(jsonPath("$[7].points").value(300))
                 .andExpect(content().string(not(containsString("flagHash"))))
                 .andExpect(content().string(not(containsString("CTF{"))))
-                .andExpect(content().string(not(containsString("$2a$"))));
+                .andExpect(content().string(not(containsString("$2a$"))))
+                // locked hint text must not be sent at all (stage 3 tier 1, stage 1 legacy hint)
+                .andExpect(content().string(not(containsString("Two kinds of scrambling"))))
+                .andExpect(content().string(not(containsString("Inspect the public profile markup"))));
 
         mvc.perform(get("/api/challenges/{id}", challengeId(2)).session(player))
                 .andExpect(status().isOk())
@@ -240,13 +246,13 @@ class PlatformApiIntegrationTest {
                 .andExpect(jsonPath("$[?(@.username == '" + username + "')].totalPoints").value(100 + 112 + 75))
                 .andExpect(jsonPath("$[?(@.username == '" + username + "')].solvedCount").value(3));
 
-        // The admin directory reports gross challenge points and every stored attempt
-        // (the rate-limited attempt above is rejected before it is stored).
+        // The admin directory reports the same net score as the scoreboard, and every stored
+        // attempt (the rate-limited attempt above is rejected before it is stored).
         long userId = userRepository.findByUsername(username).orElseThrow().getId();
         MockHttpSession admin = login("admin", "ChangeMe123!");
         mvc.perform(get("/api/admin/users").session(admin))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + userId + ")].totalScore").value(100 + 150 + 150))
+                .andExpect(jsonPath("$[?(@.id == " + userId + ")].totalScore").value(100 + 112 + 75))
                 .andExpect(jsonPath("$[?(@.id == " + userId + ")].solvedCount").value(3))
                 .andExpect(jsonPath("$[?(@.id == " + userId + ")].submissionCount").value(4))
                 .andExpect(jsonPath("$[?(@.id == " + userId + ")].role").value("PLAYER"));
@@ -339,14 +345,12 @@ class PlatformApiIntegrationTest {
 
     @Test
     void reseedingOnRestartUpdatesTheSameChallengeRows() throws Exception {
-        List<Long> idsBefore = challengeRepository.findAllByOrderByStageOrderAsc().stream()
-                .map(Challenge::getId).toList();
+        List<Long> idsBefore = seededStageIds();
+        assertEquals(8, idsBefore.size());
 
         dataSeeder.run();
 
-        List<Challenge> after = challengeRepository.findAllByOrderByStageOrderAsc();
-        assertEquals(8, after.size());
-        assertEquals(idsBefore, after.stream().map(Challenge::getId).toList());
+        assertEquals(idsBefore, seededStageIds());
         assertEquals(1, userRepository.findAll().stream().filter(u -> u.getUsername().equals("admin")).count());
 
         // Flags still verify after the hashes are re-generated
@@ -354,6 +358,109 @@ class PlatformApiIntegrationTest {
         submitFlag(player, challengeId(7), "CTF{r3v3rs3_3ng1n33r_m4st3r}")
                 .andExpect(jsonPath("$.correct").value(true))
                 .andExpect(jsonPath("$.pointsAwarded").value(250));
+    }
+
+    @Test
+    void scoreboardRanksHighestScoreFirstThenWhoeverFinishedFirst() throws Exception {
+        String early = newUsername();
+        String late = newUsername();
+        String leader = newUsername();
+        MockHttpSession earlySession = registerAndLogin(early);
+        MockHttpSession lateSession = registerAndLogin(late);
+        MockHttpSession leaderSession = registerAndLogin(leader);
+
+        submitFlag(earlySession, challengeId(2), "CTF{m3t4d4t4_r3v34ls_4ll}").andExpect(jsonPath("$.pointsAwarded").value(100));
+        Thread.sleep(20);
+        submitFlag(lateSession, challengeId(1), "CTF{0s1nt_f00tpr1nt_d1sc0v3r3d}").andExpect(jsonPath("$.pointsAwarded").value(100));
+        submitFlag(leaderSession, challengeId(3), "CTF{c1ph3r_ch41n_d3c0d3d}").andExpect(jsonPath("$.pointsAwarded").value(150));
+
+        String body = mvc.perform(get("/api/scoreboard").session(leaderSession))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<java.util.Map<String, Object>> entries = com.jayway.jsonpath.JsonPath.read(body, "$");
+
+        for (int i = 1; i < entries.size(); i++) {
+            long previous = ((Number) entries.get(i - 1).get("totalPoints")).longValue();
+            long current = ((Number) entries.get(i).get("totalPoints")).longValue();
+            assertTrue(previous >= current, "scoreboard must be sorted by totalPoints descending: " + body);
+        }
+        List<Object> order = entries.stream().map(e -> e.get("username")).toList();
+        assertTrue(order.indexOf(leader) < order.indexOf(early), body);
+        // same points and solve count: the player who reached it first ranks higher
+        assertTrue(order.indexOf(early) < order.indexOf(late), body);
+    }
+
+    @Test
+    void adminMustSupplyAFlagWhenCreatingAChallenge() throws Exception {
+        MockHttpSession admin = login("admin", "ChangeMe123!");
+        mvc.perform(post("/api/admin/challenges").session(admin).contentType(APPLICATION_JSON)
+                        .content(challengeJson(90, "No Flag", "", false)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Flag is required when creating a challenge"));
+    }
+
+    @Test
+    void adminEditWithBlankFlagKeepsTheFlagAndAllHintTiers() throws Exception {
+        MockHttpSession admin = login("admin", "ChangeMe123!");
+        long id = createChallenge(admin, 91, "Draft Stage", "CTF{edit_me}");
+
+        // What the admin form sends when the flag box is left empty
+        mvc.perform(put("/api/admin/challenges/{id}", id).session(admin).contentType(APPLICATION_JSON)
+                        .content(challengeJson(91, "Draft Stage (renamed)", "", false)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Draft Stage (renamed)"))
+                .andExpect(jsonPath("$.hint1").value("Tier one"))
+                .andExpect(jsonPath("$.hint2").value("Tier two"))
+                .andExpect(jsonPath("$.hint3").value("Tier three"));
+
+        MockHttpSession player = registerAndLogin(newUsername());
+        mvc.perform(get("/api/challenges/{id}", id).session(player))
+                .andExpect(jsonPath("$.hints", hasSize(3)));
+        submitFlag(player, id, "CTF{edit_me}")
+                .andExpect(jsonPath("$.correct").value(true));
+
+        mvc.perform(delete("/api/admin/challenges/{id}", id).session(admin)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void adminCanDeleteAChallengePlayersHaveAttempted() throws Exception {
+        MockHttpSession admin = login("admin", "ChangeMe123!");
+        long id = createChallenge(admin, 92, "Doomed Stage", "CTF{doomed}");
+
+        String username = newUsername();
+        MockHttpSession player = registerAndLogin(username);
+        unlockHint(player, id, 1).andExpect(jsonPath("$.success").value(true));
+        submitFlag(player, id, "CTF{wrong}").andExpect(jsonPath("$.correct").value(false));
+        Thread.sleep(2_100);
+        submitFlag(player, id, "CTF{doomed}").andExpect(jsonPath("$.correct").value(true));
+
+        mvc.perform(delete("/api/admin/challenges/{id}", id).session(admin))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/challenges/{id}", id).session(player))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Challenge not found"));
+        mvc.perform(get("/api/admin/submissions").session(admin))
+                .andExpect(jsonPath("$[?(@.user.username == '" + username + "')]").isEmpty());
+        mvc.perform(get("/api/scoreboard").session(player))
+                .andExpect(jsonPath("$[?(@.username == '" + username + "')]").isEmpty());
+    }
+
+    @Test
+    void adminCanDeleteAPlayerWhoUnlockedHints() throws Exception {
+        String username = newUsername();
+        MockHttpSession player = registerAndLogin(username);
+        unlockHint(player, challengeId(8), 1).andExpect(jsonPath("$.success").value(true));
+        submitFlag(player, challengeId(8), "CTF{wrong}");
+
+        long playerId = userRepository.findByUsername(username).orElseThrow().getId();
+        MockHttpSession admin = login("admin", "ChangeMe123!");
+        mvc.perform(delete("/api/admin/users/{id}", playerId).session(admin))
+                .andExpect(status().isNoContent());
+
+        assertTrue(userRepository.findByUsername(username).isEmpty());
+        mvc.perform(get("/api/scoreboard").session(admin))
+                .andExpect(jsonPath("$[?(@.username == '" + username + "')]").isEmpty());
     }
 
     // ---------------------------------------------------------------- CORS
@@ -413,6 +520,30 @@ class PlatformApiIntegrationTest {
 
     private ResultActions unlockHint(MockHttpSession session, long challengeId, int tier) throws Exception {
         return mvc.perform(post("/api/challenges/{id}/hints/{tier}", challengeId, tier).session(session));
+    }
+
+    private static String challengeJson(int stageOrder, String title, String flag, boolean active) {
+        return "{\"stageOrder\":" + stageOrder + ",\"title\":\"" + title + "\",\"domain\":\"Cryptography\","
+                + "\"difficulty\":\"Easy\",\"description\":\"Test stage\",\"hint\":\"Tier one\","
+                + "\"hint1\":\"Tier one\",\"hint2\":\"Tier two\",\"hint3\":\"Tier three\",\"points\":100,"
+                + "\"flag\":\"" + flag + "\",\"active\":" + active + "}";
+    }
+
+    /** Creates a hidden (inactive) challenge so it never shows up in other tests' player lists. */
+    private long createChallenge(MockHttpSession admin, int stageOrder, String title, String flag) throws Exception {
+        String body = mvc.perform(post("/api/admin/challenges").session(admin).contentType(APPLICATION_JSON)
+                        .content(challengeJson(stageOrder, title, flag, false)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.id")).longValue();
+    }
+
+    /** Ids of the rows holding the eight seeded stages (other tests may add hidden stages 90+). */
+    private List<Long> seededStageIds() {
+        return challengeRepository.findAllByOrderByStageOrderAsc().stream()
+                .filter(c -> c.getStageOrder() >= 1 && c.getStageOrder() <= 8)
+                .map(Challenge::getId)
+                .toList();
     }
 
     private long challengeId(int stageOrder) {

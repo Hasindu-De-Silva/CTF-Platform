@@ -61,7 +61,7 @@ public class ChallengeService {
     }
 
     /** Points for a solve: hint penalties are deducted, but a solve is never worth less than half its points. */
-    static int netPoints(int points, int penalties) {
+    public static int netPoints(int points, int penalties) {
         int minScore = points / 2;
         return Math.max(minScore, points - penalties);
     }
@@ -104,7 +104,7 @@ public class ChallengeService {
 
         return new ChallengeResponse(
                 c.getId(), c.getStageOrder(), c.getTitle(), c.getDomain(), c.getDifficulty(),
-                c.getDescription(), c.getHint(), hints, penaltyDeducted, c.getPoints(), solved,
+                c.getDescription(), hints, penaltyDeducted, c.getPoints(), solved,
                 c.getArtifactUrl(), c.getTargetUrl()
         );
     }
@@ -213,6 +213,9 @@ public class ChallengeService {
     }
 
     public Challenge createChallenge(AdminChallengeRequest req) {
+        if (req.getFlag() == null || req.getFlag().isBlank()) {
+            throw new IllegalArgumentException("Flag is required when creating a challenge");
+        }
         Challenge c = new Challenge();
         applyRequest(c, req);
         return challengeRepository.save(c);
@@ -224,8 +227,14 @@ public class ChallengeService {
         return challengeRepository.save(c);
     }
 
+    @Transactional
     public void deleteChallenge(Long id) {
-        challengeRepository.deleteById(id);
+        challengeRepository.findById(id).ifPresent(challenge -> {
+            // Player progress references the challenge, so it has to go first
+            hintUnlockRepository.deleteByChallenge(challenge);
+            submissionRepository.deleteByChallenge(challenge);
+            challengeRepository.delete(challenge);
+        });
     }
 
     private void applyRequest(Challenge c, AdminChallengeRequest req) {
@@ -272,6 +281,16 @@ public class ChallengeService {
         allUsernames.addAll(byUser.keySet());
         allUsernames.addAll(penaltiesByUserAndChallenge.keySet());
 
+        Map<String, LocalDateTime> lastSolveByUser = allCorrect.stream()
+                .collect(Collectors.toMap(s -> s.getUser().getUsername(), Submission::getSubmittedAt,
+                        (a, b) -> a.isAfter(b) ? a : b));
+
+        Comparator<ScoreboardEntry> ranking = Comparator.comparingLong(ScoreboardEntry::getTotalPoints).reversed()
+                .thenComparing(Comparator.comparingLong(ScoreboardEntry::getSolvedCount).reversed())
+                .thenComparing(e -> lastSolveByUser.get(e.getUsername()),
+                        Comparator.nullsLast(Comparator.<LocalDateTime>naturalOrder()))
+                .thenComparing(ScoreboardEntry::getUsername);
+
         return allUsernames.stream()
                 .map(username -> {
                     List<Submission> userSubs = byUser.getOrDefault(username, Collections.emptyList());
@@ -282,8 +301,7 @@ public class ChallengeService {
                             .sum();
                     return new ScoreboardEntry(username, net, userSubs.size());
                 })
-                .sorted(Comparator.comparingLong(ScoreboardEntry::getTotalPoints).reversed()
-                        .thenComparingLong(ScoreboardEntry::getSolvedCount).reversed())
+                .sorted(ranking)
                 .toList();
     }
 }

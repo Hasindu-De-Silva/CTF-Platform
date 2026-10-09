@@ -12,4 +12,6 @@ public interface HintUnlockRepository extends JpaRepository<HintUnlock, Long> {
     List<HintUnlock> findByUserAndChallenge(User user, Challenge challenge);
     Optional<HintUnlock> findByUserAndChallengeAndTier(User user, Challenge challenge, Integer tier);
     void deleteByUserAndChallenge(User user, Challenge challenge);
+    void deleteByUser(User user);
+    void deleteByChallenge(Challenge challenge);
 }
