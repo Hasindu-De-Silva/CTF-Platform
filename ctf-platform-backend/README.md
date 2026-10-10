@@ -22,7 +22,7 @@ mvn spring-boot:run
 ```
 On first startup, the log shows (the admin line only appears the first time):
 ```
-INFO ... com.ctfplaybox.config.DataSeeder : Seeded default admin - username: admin / password: ChangeMe123!
+INFO ... com.ctfplaybox.config.DataSeeder : Seeded default admin - username: admin / password: [REDACTED]
 INFO ... com.ctfplaybox.config.DataSeeder : Seeded/Updated 8 interconnected challenges across 8 domains (1500 pts total) for Operation Aegis Breach!
 ```
 The API is now live at `http://localhost:8080`.
@@ -81,7 +81,7 @@ Log in as admin and manage challenges:
 ```bash
 curl -c admin_cookies.txt -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"ChangeMe123!"}'
+  -d '{"username":"admin","password":"<admin-password>"}'
 
 curl -b admin_cookies.txt http://localhost:8080/api/admin/challenges
 

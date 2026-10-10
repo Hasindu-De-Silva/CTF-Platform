@@ -193,8 +193,8 @@ npm run dev
 
 | Service | Access Point | Default Credentials / Context |
 | :--- | :--- | :--- |
-| **CTF Web Platform** | [http://localhost:3000](http://localhost:3000) | Register player account or login as admin |
-| **Platform Administrator** | [http://localhost:3000/login](http://localhost:3000/login) | **User:** `admin` \| **Pass:** `ChangeMe123!` |
+| **CTF Web Platform** | [http://localhost:3000](http://localhost:3000) | Register player account or login with authorized credentials |
+| **Platform Administrator** | [http://localhost:3000/login](http://localhost:3000/login) | Admin portal access (credentials managed privately) |
 | **REST API & Downloads** | [http://localhost:8080](http://localhost:8080) | Backend REST API & static challenge artifacts |
 | **Stage 1 (OSINT Console)** | [http://localhost:3000/stage1-osint](http://localhost:3000/stage1-osint) | Interactive profile & forum inspection |
 | **Stage 4 (Gateway Portal)** | [http://localhost:3000/stage4-gateway](http://localhost:3000/stage4-gateway) | Or direct via gateway: `http://localhost:8081` |
